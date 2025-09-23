@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/MyApp/MyApp.csproj": {}
+    "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/SoulfulJourney/MyApp.csproj": {}
   },
   "projects": {
-    "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/MyApp/MyApp.csproj": {
+    "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/SoulfulJourney/MyApp.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/MyApp/MyApp.csproj",
+        "projectUniqueName": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/SoulfulJourney/MyApp.csproj",
         "projectName": "MyApp",
-        "projectPath": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/MyApp/MyApp.csproj",
+        "projectPath": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/SoulfulJourney/MyApp.csproj",
         "packagesPath": "/Users/christianhenken/.nuget/packages/",
-        "outputPath": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/MyApp/obj/",
+        "outputPath": "/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/SoulfulJourney/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/Users/christianhenken/.nuget/NuGet/NuGet.Config"
