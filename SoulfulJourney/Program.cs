@@ -8,16 +8,16 @@ namespace SoulfulJourney
 {
     public class GameEngine : Game
     {
-    private GraphicsDeviceManager _graphics;
-    private SpriteBatch? _spriteBatch;
+        private GraphicsDeviceManager _graphics;
+        private SpriteBatch? _spriteBatch;
 
-    private Texture2D? _playerTexture;        // Player variables
-    private Vector2 _playerPosition;
-    private float _playerSpeed = 200f;
-    private Rectangle _baseplateRect;      // Baseplate variables
-    private Texture2D? _baseplateTexture;
-    private Texture2D? _platformTexture;     // Additional platforms
-    private List<Rectangle> _platforms = new List<Rectangle>();
+        private Texture2D? _playerTexture;        // Player variables
+        private Vector2 _playerPosition;
+        private float _playerSpeed = 200f;
+        private Rectangle _baseplateRect;      // Baseplate variables
+        private Texture2D? _baseplateTexture;
+        private Texture2D? _platformTexture;     // Additional platforms
+        private List<Rectangle> _platforms = new List<Rectangle>();
         private bool _isJumping = false;            // Jump variables
         private float _jumpVelocity = 0f;
         private float _gravity = 600f;
@@ -56,7 +56,6 @@ namespace SoulfulJourney
                     int tileX = x / tileSize;
                     int tileY = y / tileSize;
                     bool evenTile = ((tileX + tileY) % 2) == 0;
-
                     Color c = evenTile ? Color.Black : Color.Gray;
                     int index = y * PlayerWidth + x;
                     playerData[index] = c;
