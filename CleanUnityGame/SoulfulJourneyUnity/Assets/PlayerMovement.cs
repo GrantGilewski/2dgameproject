@@ -23,10 +23,6 @@ public class PlayerMovement : MonoBehaviour
     private Rigidbody2D rb;
     [SerializeField] private BoxCollider2D playerCollider;
     private SpriteRenderer spriteRenderer;
-    
-    [Header("Sprite Scaling")]
-    [SerializeField] private Transform spriteTransform; // Reference to sprite child object
-    [SerializeField] private Vector3 spriteScale = Vector3.one; // Custom sprite scale
 
     // Input
     private float horizontalInput;
@@ -48,16 +44,12 @@ public class PlayerMovement : MonoBehaviour
         playerCollider = GetComponent<BoxCollider2D>();
         
         // Try to get SpriteRenderer from child object first, then from this object
-        if (spriteTransform != null)
-            spriteRenderer = spriteTransform.GetComponent<SpriteRenderer>();
-        else
+        spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        if (spriteRenderer == null)
             spriteRenderer = GetComponent<SpriteRenderer>();
 
         // Prevent player from rotating when falling off edges
         rb.freezeRotation = true;
-        
-        // Apply custom sprite scale if sprite transform is assigned
-        ApplySpriteScale();
     }
 
     void Update()
@@ -96,21 +88,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
     
-    private void ApplySpriteScale()
-    {
-        if (spriteTransform != null)
-        {
-            spriteTransform.localScale = spriteScale;
-        }
-    }
-    
-    // Call this method in inspector or at runtime to update sprite scale
-    [ContextMenu("Apply Sprite Scale")]
-    public void UpdateSpriteScale()
-    {
-        ApplySpriteScale();
-    }
-    
     private void HandleMovement()
     {
         // Horizontal movement
@@ -141,14 +118,17 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckGrounded()
     {
-        Vector2 boxCenter = (Vector2)transform.position + playerCollider.offset;
+        Vector2 boxCenter = (Vector2)transform.position + (Vector2)(playerCollider.offset * transform.localScale.y);
         float checkDistance = groundCheckDistance;
-        float playerWidth = playerCollider.size.x;
         
-        // Create multiple ground check positions across the player's width
-        Vector2 leftCheckPos = new Vector2(boxCenter.x - playerWidth * 0.4f, boxCenter.y - (playerCollider.size.y * 0.5f) - 0.05f);
-        Vector2 centerCheckPos = new Vector2(boxCenter.x, boxCenter.y - (playerCollider.size.y * 0.5f) - 0.05f);
-        Vector2 rightCheckPos = new Vector2(boxCenter.x + playerWidth * 0.4f, boxCenter.y - (playerCollider.size.y * 0.5f) - 0.05f);
+        // Account for scaling when calculating the effective collider dimensions
+        float scaledPlayerWidth = playerCollider.size.x * transform.localScale.x;
+        float scaledPlayerHeight = playerCollider.size.y * transform.localScale.y;
+        
+        // Create multiple ground check positions across the player's width, accounting for scale
+        Vector2 leftCheckPos = new Vector2(boxCenter.x - scaledPlayerWidth * 0.4f, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
+        Vector2 centerCheckPos = new Vector2(boxCenter.x, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
+        Vector2 rightCheckPos = new Vector2(boxCenter.x + scaledPlayerWidth * 0.4f, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
         
         // Check ground at multiple points
         bool leftGrounded = CheckGroundAtPosition(leftCheckPos, checkDistance);

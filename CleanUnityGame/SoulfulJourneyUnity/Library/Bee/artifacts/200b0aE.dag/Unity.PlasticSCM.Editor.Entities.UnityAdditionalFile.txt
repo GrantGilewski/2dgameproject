@@ -1,1 +1,1 @@
-/Users/christianhenken/SoulfulJourneyUnity
+/Users/christianhenken/SoulfulJourneyRepo/2dgameproject/CleanUnityGame/SoulfulJourneyUnity
