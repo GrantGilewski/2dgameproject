@@ -3,7 +3,16 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 3
-  tags: []
+  tags:
+  - OneWayPlatform
+  - Water
+  - Door
+  - FallingPlatform
+  - Damage
+  - Switch
+  - Trigger
+  - Teleporter
+  - Checkpoint
   layers:
   - Default
   - TransparentFX
