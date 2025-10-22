@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using System.Collections;
+using UnityEngine.UIElements;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -71,8 +72,8 @@ public class PlayerMovement : MonoBehaviour
     
     // Health Bar UI
     private Canvas healthBarCanvas;
-    private Image healthBarBackground;
-    private Image healthBarFill;
+    private UnityEngine.UI.Image healthBarBackground;
+    private UnityEngine.UI.Image healthBarFill;
 
     void Awake()
     {
@@ -445,7 +446,7 @@ public class PlayerMovement : MonoBehaviour
         // Create background (grey bar that shows full health bar area)
         GameObject backgroundGO = new GameObject("HealthBarBackground");
         backgroundGO.transform.SetParent(canvasGO.transform, false);
-        healthBarBackground = backgroundGO.AddComponent<Image>();
+        healthBarBackground = backgroundGO.AddComponent<UnityEngine.UI.Image>();
         
         // Set sprite for background
         // Create a simple white texture for the background
@@ -465,7 +466,7 @@ public class PlayerMovement : MonoBehaviour
         // Create fill (colored bar that shows current health)
         GameObject fillGO = new GameObject("HealthBarFill");
         fillGO.transform.SetParent(backgroundGO.transform, false); // Child of background
-        healthBarFill = fillGO.AddComponent<Image>();
+        healthBarFill = fillGO.AddComponent<UnityEngine.UI.Image>();
         
         // Create a white sprite for the fill
         Texture2D fillTexture = new Texture2D(1, 1);
@@ -474,9 +475,9 @@ public class PlayerMovement : MonoBehaviour
         healthBarFill.sprite = Sprite.Create(fillTexture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f);
         
         healthBarFill.color = Color.green;
-        healthBarFill.type = Image.Type.Filled;
-        healthBarFill.fillMethod = Image.FillMethod.Horizontal;
-        healthBarFill.fillOrigin = (int)Image.OriginHorizontal.Left; // Fill from left to right, empty from right to left
+        healthBarFill.type = UnityEngine.UI.Image.Type.Filled;
+        healthBarFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+        healthBarFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left; // Fill from left to right, empty from right to left
         
         RectTransform fillRect = fillGO.GetComponent<RectTransform>();
         fillRect.anchorMin = Vector2.zero;
@@ -529,9 +530,29 @@ public class PlayerMovement : MonoBehaviour
         foreach (RaycastHit2D hit in hits)
         {
             // Skip our own colliders
-            if (hit.collider != playerCollider && hit.collider.gameObject != gameObject)
-            {
-                return true;
+            if (hit.collider != playerCollider && hit.collider.gameObject != gameObject) {
+
+                // Get PlatformEffector2D component
+                PlatformEffector2D collidedPE2D = hit.collider.gameObject.GetComponent<PlatformEffector2D>();
+                double collidedTop = hit.collider.gameObject.transform.position.y + hit.collider.gameObject.GetComponent<SpriteRenderer>().bounds.size.y;
+
+                if (collidedPE2D != null)
+                {
+                    if (collidedPE2D.useOneWay)
+                    {
+                        // One way collision only works if player is above it and if is not rotated between 90 and 270 degrees
+                        return (collidedPE2D.rotationalOffset < 90 || collidedPE2D.rotationalOffset > 270) && transform.position.y > collidedTop;
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    // Assume no one way property
+                    return true;
+                }
             }
         }
         

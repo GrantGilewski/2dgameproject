@@ -466,21 +466,15 @@ public class EnvironmentDoor : MonoBehaviour, IObjectBehavior
         SpriteRenderer spriteRenderer = innerDoorSprite.AddComponent<SpriteRenderer>();
         
         // Create a brown rectangle texture
-        Texture2D doorTexture = new Texture2D(32, 32); // Make it larger for visibility
+        Texture2D doorTexture = new Texture2D(1, 1); // Make it larger for visibility
         Color brownColor = new Color(0.6f, 0.4f, 0.2f, 1f);
         
         // Fill the entire texture with brown
-        for (int x = 0; x < 32; x++)
-        {
-            for (int y = 0; y < 32; y++)
-            {
-                doorTexture.SetPixel(x, y, brownColor);
-            }
-        }
+        doorTexture.SetPixel(0, 0, brownColor);
         doorTexture.Apply();
         
         // Create sprite from texture
-        Sprite doorSprite = Sprite.Create(doorTexture, new Rect(0, 0, 32, 32), Vector2.one * 0.5f, 32f);
+        Sprite doorSprite = Sprite.Create(doorTexture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f, 1f);
         spriteRenderer.sprite = doorSprite;
         
         // Set sorting layer and order
