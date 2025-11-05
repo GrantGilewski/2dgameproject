@@ -124,11 +124,11 @@ public class ObjectBehaviorController : MonoBehaviour
     }
     
     // WATER SYSTEM
-    public void HandleWaterEntry(GameObject player)
+    public void HandleWaterEntry(GameObject player, Collider2D waterCollider = null)
     {
         if (playerMovement != null)
         {
-            playerMovement.SetWaterState(true, GetWaterProperties());
+            playerMovement.SetWaterState(true, GetWaterProperties(), waterCollider);
         }
     }
     
@@ -313,7 +313,7 @@ public class Water : MonoBehaviour, IObjectBehavior
             playerInWater = true;
             if (controller != null)
             {
-                controller.HandleWaterEntry(other.gameObject);
+                controller.HandleWaterEntry(other.gameObject, waterCollider);
             }
         }
     }

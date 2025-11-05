@@ -81,10 +81,19 @@ public class PlayerMovement : MonoBehaviour
     private float timeInWater = 0f;
     private int waterObjectCount = 0; // Track how many water objects player is in
     
+    // Surface Swimming System
+    private bool isAtWaterSurface = false;
+    private float waterSurfaceY = 0f; // Y position of the water surface
+    private Collider2D currentWaterCollider; // Track the current water collider for surface detection
+    private bool wantsToSubmerge = false; // Track if player wants to go underwater
+    
     // Health Bar UI
     private Canvas healthBarCanvas;
     private Image healthBarBackground;
     private Image healthBarFill;
+    
+    // Weapon System
+    private WeaponClassController weaponController;
 
     void Awake()
     {
@@ -121,6 +130,9 @@ public class PlayerMovement : MonoBehaviour
         
         // Create health bar
         CreateHealthBar();
+        
+        // Get weapon controller (should be on the same GameObject)
+        weaponController = GetComponent<WeaponClassController>();
     }
 
     void Update()
@@ -151,6 +163,10 @@ public class PlayerMovement : MonoBehaviour
             leftInput = Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed;
             rightInput = Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed;
             downInput = Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed;
+            
+            // Track if player wants to submerge (for surface swimming)
+            wantsToSubmerge = downInput;
+            
             // Jump - spacebar, W key, and up arrow (use wasPressedThisFrame for better jump responsiveness)
             jumpInput = Keyboard.current.spaceKey.wasPressedThisFrame ||
                        Keyboard.current.wKey.wasPressedThisFrame ||
@@ -166,6 +182,14 @@ public class PlayerMovement : MonoBehaviour
     
     private void HandleMovement()
     {
+        // Check if weapon menu is open - disable movement if it is
+        if (weaponController != null && weaponController.IsWeaponMenuOpen())
+        {
+            // Stop horizontal movement but maintain vertical velocity
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            return;
+        }
+        
         // Horizontal movement (modified by water if in water)
         float currentMoveSpeed = inWater && currentWaterProperties != null ? 
             originalMoveSpeed * currentWaterProperties.speedModifier : moveSpeed;
@@ -180,8 +204,9 @@ public class PlayerMovement : MonoBehaviour
         
         rb.linearVelocity = new Vector2(targetVelocityX, rb.linearVelocity.y);
         
-        // Sprite flipping
-        if (spriteRenderer != null)
+        // Sprite flipping (don't flip during weapon menu)
+        bool weaponMenuOpen = weaponController != null && weaponController.IsWeaponMenuOpen();
+        if (spriteRenderer != null && !weaponMenuOpen)
         {
             if (horizontalInput < -0.1f)
             {
@@ -198,22 +223,7 @@ public class PlayerMovement : MonoBehaviour
         // Jumping/Swimming
         if (inWater)
         {
-            // Check if W or Up is being held for continuous swimming
-            bool swimUpInput = false;
-            if (Keyboard.current != null)
-            {
-                swimUpInput = Keyboard.current.wKey.isPressed || 
-                             Keyboard.current.upArrowKey.isPressed ||
-                             Keyboard.current.spaceKey.isPressed;
-            }
-            
-            if (swimUpInput)
-            {
-                // Continuous swimming upward when holding swim keys
-                float swimForce = currentWaterProperties != null ? 
-                    originalJumpForce * currentWaterProperties.jumpForceModifier : originalJumpForce * 0.8f;
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, swimForce);
-            }
+            HandleSurfaceSwimming();
         }
         else if (jumpInput && isGrounded && hasCeilingClearance)
         {
@@ -225,6 +235,77 @@ public class PlayerMovement : MonoBehaviour
         if (downInput && currentPlatform != null && isGrounded)
         {
             StartCoroutine(DisableCollision());
+        }
+    }
+    
+    private void HandleSurfaceSwimming()
+    {
+        // Check if W or Up is being held for continuous swimming
+        bool swimUpInput = false;
+        if (Keyboard.current != null)
+        {
+            swimUpInput = Keyboard.current.wKey.isPressed || 
+                         Keyboard.current.upArrowKey.isPressed ||
+                         Keyboard.current.spaceKey.isPressed;
+        }
+        
+        // Calculate player's half height for surface detection
+        float playerHalfHeight = (playerCollider.size.y * transform.localScale.y) * 0.5f;
+        float playerTopY = transform.position.y + playerHalfHeight;
+        float targetSurfaceY = waterSurfaceY - playerHalfHeight; // Player center should be at surface minus half height
+        
+        // Check if player is near the water surface
+        float distanceFromSurface = Mathf.Abs(transform.position.y - targetSurfaceY);
+        bool nearSurface = distanceFromSurface < 0.3f; // Tolerance for being "at surface"
+        
+        // Update surface state
+        if (nearSurface && playerTopY >= waterSurfaceY - 0.1f)
+        {
+            isAtWaterSurface = true;
+        }
+        else if (wantsToSubmerge || transform.position.y < targetSurfaceY - 1f)
+        {
+            isAtWaterSurface = false;
+        }
+        
+        // Handle swimming behavior
+        if (isAtWaterSurface && !wantsToSubmerge)
+        {
+            // Surface swimming - keep player at surface level
+            float currentY = transform.position.y;
+            
+            // If above target surface level, gently pull down to surface
+            if (currentY > targetSurfaceY)
+            {
+                float pullForce = (currentY - targetSurfaceY) * 10f; // Proportional force
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, -pullForce);
+            }
+            // If at or below surface, maintain surface level
+            else
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
+                transform.position = new Vector3(transform.position.x, targetSurfaceY, transform.position.z);
+            }
+            
+            // Allow swimming up only if player wants to (to get out of water)
+            if (swimUpInput)
+            {
+                float surfaceSwimForce = currentWaterProperties != null ? 
+                    originalJumpForce * currentWaterProperties.jumpForceModifier * 0.8f : originalJumpForce * 0.6f;
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, surfaceSwimForce);
+                isAtWaterSurface = false; // Allow leaving surface
+            }
+        }
+        else
+        {
+            // Underwater swimming - normal behavior
+            if (swimUpInput)
+            {
+                // Continuous swimming upward when holding swim keys - increased speed
+                float swimForce = currentWaterProperties != null ? 
+                    originalJumpForce * currentWaterProperties.jumpForceModifier * 1.2f : originalJumpForce * 0.95f;
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, swimForce);
+            }
         }
     }
 
@@ -314,11 +395,21 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
         
-        // Check if we just started falling
-        if (wasGroundedLastFrame && !isGrounded && rb.linearVelocity.y <= 0)
+        // Check if we just became airborne (includes jumping off ledges)
+        if (wasGroundedLastFrame && !isGrounded)
         {
-            isFalling = true;
-            fallStartHeight = transform.position.y;
+            // Start tracking fall from any airborne state
+            if (!isFalling)
+            {
+                isFalling = true;
+                fallStartHeight = transform.position.y;
+            }
+        }
+        
+        // Update fall start height if we're still going up (for jump tracking)
+        if (isFalling && rb.linearVelocity.y > 0 && transform.position.y > fallStartHeight)
+        {
+            fallStartHeight = transform.position.y; // Track highest point reached
         }
         
         // Check if we just landed
@@ -330,6 +421,7 @@ public class PlayerMovement : MonoBehaviour
             if (fallDistance > minFallDamageHeight)
             {
                 ApplyFallDamage(fallDistance);
+                Debug.Log($"Fall damage applied! Distance: {fallDistance:F1}m, Damage calculated from height {fallStartHeight:F1} to {transform.position.y:F1}");
             }
             
             isFalling = false;
@@ -424,12 +516,20 @@ public class PlayerMovement : MonoBehaviour
     }
     
     // Public method for water state management
-    public void SetWaterState(bool enteringWater, WaterProperties properties = null)
+    public void SetWaterState(bool enteringWater, WaterProperties properties = null, Collider2D waterCollider = null)
     {
         if (enteringWater)
         {
             // Increment water object counter
             waterObjectCount++;
+            
+            // Store the water collider for surface detection
+            if (waterCollider != null)
+            {
+                currentWaterCollider = waterCollider;
+                // Calculate water surface Y position (top of the water collider)
+                waterSurfaceY = waterCollider.bounds.max.y;
+            }
             
             // Only set up water physics if this is the first water object
             if (waterObjectCount == 1)
@@ -440,6 +540,9 @@ public class PlayerMovement : MonoBehaviour
                 // Reset fall damage tracking when entering water
                 isFalling = false;
                 fallStartHeight = 0f;
+                
+                // Reset surface swimming state
+                isAtWaterSurface = false;
             }
             
             // Update water properties (use the most recent properties)
@@ -459,6 +562,10 @@ public class PlayerMovement : MonoBehaviour
             if (waterObjectCount == 0)
             {
                 inWater = false;
+                
+                // Reset surface swimming state
+                isAtWaterSurface = false;
+                currentWaterCollider = null;
                 
                 // Restore normal physics
                 currentWaterProperties = null;
@@ -516,14 +623,15 @@ public class PlayerMovement : MonoBehaviour
         }
         else if (!inWater)
         {
-            // Reset rotation when not in water
+            // Reset rotation when not in water (only when completely out of all water)
             transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.identity, Time.deltaTime * 5f);
         }
     }
     
     private void HandleWaterTilt()
     {
-        if (inWater && currentWaterProperties != null)
+        // Use inWater state instead of currentWaterProperties to maintain tilt across water transitions
+        if (inWater)
         {
             // Tilt player based on horizontal movement
             float tiltAngle = 0f;
