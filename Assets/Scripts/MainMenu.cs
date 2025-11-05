@@ -5,18 +5,12 @@ public class MainMenu : MonoBehaviour
 {
     public void NewJourney()
     {
-        SceneManager.LoadScene("StartingScene"); // Loads new game 
+        SceneManager.LoadScene("StartingScene");
     }
 
     public void ContinueGame()
     {
-        // For now, just load the starting scene
         SceneManager.LoadScene("StartingScene");
-    }
-
-    public void OpenOptions()
-    {
-        Debug.Log("Options menu opened!");
     }
 
     public void QuitGame()
