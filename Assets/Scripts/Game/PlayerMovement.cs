@@ -537,9 +537,13 @@ public class PlayerMovement : MonoBehaviour
         if (enteringWater)
         {
             // Spawn Water Particles if player is moving down fast enough
-            if (rb.linearVelocity.y < -minFallSpeedForSplash)
+            if (rb.linearVelocity.y < -minFallSpeedForSplash && waterParticles != null)
             {
                 waterParticlesInstance = Instantiate(waterParticles, new Vector3(transform.position.x, transform.position.y - (playerCollider.size.y * transform.localScale.y) * 0.5f, transform.position.z), Quaternion.Euler(0, 0, 60));
+            }
+            else if (waterParticles == null)
+            {
+                Debug.LogWarning("Water particles not assigned in PlayerMovement. Please assign a particle system in the inspector.");
             }
 
             // Increment water object counter
@@ -588,6 +592,13 @@ public class PlayerMovement : MonoBehaviour
                 // Reset surface swimming state
                 isAtWaterSurface = false;
                 currentWaterCollider = null;
+                
+                // Clean up water particle effects
+                if (waterParticlesInstance != null)
+                {
+                    Destroy(waterParticlesInstance.gameObject);
+                    waterParticlesInstance = null;
+                }
                 
                 // Restore normal physics
                 currentWaterProperties = null;
@@ -803,7 +814,19 @@ public class PlayerMovement : MonoBehaviour
 
                 // Get PlatformEffector2D component
                 PlatformEffector2D collidedPE2D = hit.collider.gameObject.GetComponent<PlatformEffector2D>();
-                double collidedTop = hit.collider.gameObject.transform.position.y + hit.collider.gameObject.GetComponent<SpriteRenderer>().bounds.size.y;
+                
+                // Get collider top position - check for SpriteRenderer first
+                double collidedTop = hit.collider.gameObject.transform.position.y;
+                SpriteRenderer collidedSpriteRenderer = hit.collider.gameObject.GetComponent<SpriteRenderer>();
+                if (collidedSpriteRenderer != null)
+                {
+                    collidedTop += collidedSpriteRenderer.bounds.size.y;
+                }
+                else
+                {
+                    // Fallback to collider bounds if no SpriteRenderer
+                    collidedTop += hit.collider.bounds.size.y;
+                }
 
                 if (collidedPE2D != null)
                 {

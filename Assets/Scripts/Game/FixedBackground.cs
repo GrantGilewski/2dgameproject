@@ -70,7 +70,7 @@ public class FixedBackground : MonoBehaviour
     private void SetupBackground()
     {
         backgroundSpriteRenderer.sortingLayerName = "Background";
-        backgroundSpriteRenderer.sortingOrder = -1; // Use -1 as you specified
+        // Note: Sorting order is manually set in inspector (e.g., -100)
         backgroundSpriteRenderer.color = Color.white;
         
         if (autoScale && backgroundSpriteRenderer.sprite != null)
