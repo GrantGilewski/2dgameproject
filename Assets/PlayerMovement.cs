@@ -217,9 +217,11 @@ public class PlayerMovement : MonoBehaviour
         
         rb.linearVelocity = new Vector2(targetVelocityX, rb.linearVelocity.y);
         
-        // Sprite flipping (don't flip during weapon menu)
+        // Sprite flipping (don't flip during weapon menu or when using WhisperShard)
         bool weaponMenuOpen = weaponController != null && weaponController.IsWeaponMenuOpen();
-        if (spriteRenderer != null && !weaponMenuOpen)
+        bool isUsingWhisperShard = weaponController != null && weaponController.IsWhisperShardActive;
+        
+        if (spriteRenderer != null && !weaponMenuOpen && !isUsingWhisperShard)
         {
             if (horizontalInput < -0.1f)
             {

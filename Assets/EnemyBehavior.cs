@@ -25,6 +25,9 @@ public class EnemyBehavior : MonoBehaviour
     [SerializeField] private float attackDamage = 15f; // Damage dealt by enemy attacks
     [SerializeField] private float attackDuration = 0.3f; // How long attack damage object lasts
     [SerializeField] private Vector2 attackSize = new Vector2(1f, 1f); // Size of attack damage object
+    [SerializeField] private float jumpForce = 8f; // Force applied when enemy jumps
+    [SerializeField] private float jumpCooldown = 1f; // Time between jumps
+    [SerializeField] private float minHeightDifferenceToJump = 1.5f; // Minimum height difference to trigger jump
     
     [Header("Collision")]
     [SerializeField] private LayerMask playerLayerMask = 1; // What layers count as player
@@ -43,6 +46,7 @@ public class EnemyBehavior : MonoBehaviour
     private bool playerInRange = false;
     private float lastAttackTime = 0f;
     private bool isFacingRight = true;
+    private float lastJumpTime = 0f;
     
     // Damage Object Integration
     private bool inDamageZone = false;
@@ -90,6 +94,13 @@ public class EnemyBehavior : MonoBehaviour
             {
                 enemyCollider.sharedMaterial = enemyMaterial;
             }
+        }
+        
+        // Ensure rotation is frozen even if rigidbody already exists
+        if (rb != null)
+        {
+            rb.freezeRotation = true;
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
         }
         
         // Add collider if none exists
@@ -148,6 +159,12 @@ public class EnemyBehavior : MonoBehaviour
         UpdateHealthBarPosition();
         UpdateHealthBar(); // Animate health bar continuously
         
+        // Ensure enemy rotation stays at zero (additional safety)
+        if (transform.rotation != Quaternion.identity)
+        {
+            transform.rotation = Quaternion.identity;
+        }
+        
         // Handle continuous damage while in damage zone
         if (inDamageZone && currentDamageObject != null)
         {
@@ -162,13 +179,6 @@ public class EnemyBehavior : MonoBehaviour
                     if (isDead) return;
                     
                     lastDamageTime = Time.time;
-                    // Safe logging with multiple null checks
-                    string objName = "Unknown";
-                    if (currentDamageObject != null && currentDamageObject.gameObject != null)
-                    {
-                        objName = currentDamageObject.gameObject.name;
-                    }
-                    Debug.Log($"Enemy {gameObject.name} took {currentDamageObject.damageAmount} damage from {objName}");
                 }
                 else if (currentDamageObject == null || currentDamageObject.gameObject == null)
                 {
@@ -243,7 +253,6 @@ public class EnemyBehavior : MonoBehaviour
             inDamageZone = true;
             currentDamageObject = damageObj;
             lastDamageTime = 0f; // Reset timer to cause immediate damage
-            Debug.Log($"Enemy {gameObject.name} entered damage zone: {other.gameObject.name}");
         }
     }
     
@@ -256,7 +265,6 @@ public class EnemyBehavior : MonoBehaviour
         {
             inDamageZone = false;
             currentDamageObject = null;
-            Debug.Log($"Enemy {gameObject.name} exited damage zone: {other.gameObject.name}");
         }
     }
     
@@ -271,7 +279,6 @@ public class EnemyBehavior : MonoBehaviour
             inDamageZone = true;
             currentDamageObject = damageObj;
             lastDamageTime = 0f; // Reset timer to cause immediate damage
-            Debug.Log($"Enemy {gameObject.name} collided with damage object: {collision.gameObject.name}");
         }
     }
     
@@ -284,7 +291,6 @@ public class EnemyBehavior : MonoBehaviour
         {
             inDamageZone = false;
             currentDamageObject = null;
-            Debug.Log($"Enemy {gameObject.name} stopped colliding with damage object: {collision.gameObject.name}");
         }
     }
     
@@ -338,7 +344,20 @@ public class EnemyBehavior : MonoBehaviour
         
         Vector3 direction = (playerTransform.position - transform.position).normalized;
         
-        // Move towards player (only horizontal movement)
+        // Check if player is significantly above enemy and we should jump
+        float heightDifference = playerTransform.position.y - transform.position.y;
+        bool shouldJump = heightDifference > minHeightDifferenceToJump && 
+                         Time.time - lastJumpTime >= jumpCooldown &&
+                         Mathf.Abs(rb.linearVelocity.y) < 0.1f; // Only jump when grounded (not already moving vertically)
+        
+        if (shouldJump)
+        {
+            // Apply jump force
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            lastJumpTime = Time.time;
+        }
+        
+        // Move towards player (horizontal movement)
         float horizontalMovement = direction.x * followSpeed;
         rb.linearVelocity = new Vector2(horizontalMovement, rb.linearVelocity.y);
     }
@@ -367,8 +386,6 @@ public class EnemyBehavior : MonoBehaviour
         Vector3 attackPosition = transform.position + attackDirection * (attackRange * 0.7f); // Slightly in front of enemy
         
         StartCoroutine(CreateAttackDamageObject(attackPosition));
-        
-        Debug.Log($"Enemy {gameObject.name} attacks player!");
     }
     
     private IEnumerator CreateAttackDamageObject(Vector3 position)
@@ -387,12 +404,8 @@ public class EnemyBehavior : MonoBehaviour
         damageComponent.damageAmount = (int)attackDamage;
         damageComponent.damageRate = 0.1f; // Fast damage rate
         
-        // Use reflection to set that this should NOT damage enemies (only player)
-        var excludeEnemyField = typeof(DamageObject).GetField("canDamageEnemies", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (excludeEnemyField != null)
-        {
-            excludeEnemyField.SetValue(damageComponent, false);
-        }
+        // Set that this should NOT damage enemies (only player)
+        damageComponent.canDamageEnemies = false;
         
         // Visual indicator (temporary - will be replaced with graphics later)
         SpriteRenderer attackRenderer = attack.AddComponent<SpriteRenderer>();
@@ -441,8 +454,6 @@ public class EnemyBehavior : MonoBehaviour
         
         currentHealth -= damage;
         currentHealth = Mathf.Max(0, currentHealth);
-        
-        Debug.Log($"Enemy {gameObject.name} took {damage} damage. Health: {currentHealth}/{maxHealth}");
         
         // Update health bar display
         UpdateHealthBar();

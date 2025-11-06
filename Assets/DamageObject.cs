@@ -20,7 +20,7 @@ public class DamageObject : MonoBehaviour
     [SerializeField] private bool excludePlayerLayer = false;
     
     [Tooltip("If true, this damage object can damage enemies")]
-    [SerializeField] private bool canDamageEnemies = true;
+    public bool canDamageEnemies = true;
     
 
     

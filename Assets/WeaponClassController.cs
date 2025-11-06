@@ -95,6 +95,7 @@ public class WeaponClassController : MonoBehaviour
     
     // Public Properties
     public bool IsChargingValorAttack => isChargingValorAttack;
+    public bool IsWhisperShardActive => equippedShards[activeSlotIndex] == ShardType.WhisperShard;
     
     void Start()
     {
@@ -113,8 +114,6 @@ public class WeaponClassController : MonoBehaviour
         InitializeGUI();
         LoadShardSprites();
         FindStormParticlePoint();
-        
-        Debug.Log("WeaponClassController initialized on player");
     }
     
     void Update()
@@ -122,6 +121,12 @@ public class WeaponClassController : MonoBehaviour
         CheckForNearbyShards();
         HandleInput();
         UpdatePromptPosition();
+        
+        // Continuously update facing direction when using WhisperShard
+        if (IsWhisperShardActive)
+        {
+            UpdatePlayerFacingForMouse();
+        }
     }
     
     private void InitializeGUI()
@@ -240,7 +245,6 @@ public class WeaponClassController : MonoBehaviour
                 if (spriteRenderer != null && spriteRenderer.sprite != null)
                 {
                     shardSprites[shardTypes[i]] = spriteRenderer.sprite;
-                    Debug.Log($"Loaded sprite for {shardTypes[i]}");
                 }
             }
         }
@@ -539,8 +543,6 @@ public class WeaponClassController : MonoBehaviour
         Vector3 attackPosition = playerTransform.position + (Vector3.right * (facingLeft ? -swordRange : swordRange));
         
         StartCoroutine(CreateSwordAttack(attackPosition));
-        
-        Debug.Log("ValorShard sword attack!");
     }
     
     private void UseWhisperShard(bool isRightClick)
@@ -554,7 +556,6 @@ public class WeaponClassController : MonoBehaviour
             
             ThrowDaggerProjectile();
             lastProjectileAttackTime = Time.time;
-            Debug.Log("WhisperShard dagger throw!");
         }
         else
         {
@@ -563,7 +564,6 @@ public class WeaponClassController : MonoBehaviour
             
             CreateDaggerStrike();
             lastDaggerAttackTime = Time.time;
-            Debug.Log("WhisperShard dagger strike!");
         }
     }
     
@@ -578,7 +578,6 @@ public class WeaponClassController : MonoBehaviour
             
             CreateLightningBolt();
             lastLightningBoltTime = Time.time;
-            Debug.Log("StormShard lightning bolt!");
         }
         else
         {
@@ -587,7 +586,6 @@ public class WeaponClassController : MonoBehaviour
             
             CreateElectricArc();
             lastLightningArcTime = Time.time;
-            Debug.Log("StormShard electric arc!");
         }
     }
     
@@ -869,6 +867,32 @@ public class WeaponClassController : MonoBehaviour
         float yOffset = 1f; // Height above player center
         
         stormParticlePoint.transform.localPosition = new Vector3(xOffset, yOffset, 0);
+    }
+    
+    private void UpdatePlayerFacingForMouse()
+    {
+        // Get mouse position in world space
+        Vector3 mousePosition = Vector3.zero;
+        if (Mouse.current != null && Camera.main != null)
+        {
+            Vector2 mouseScreenPos = Mouse.current.position.ReadValue();
+            mousePosition = Camera.main.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, Camera.main.nearClipPlane));
+            mousePosition.z = 0; // Ensure z is 0 for 2D
+        }
+        
+        // Get player sprite for flipping
+        SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
+        if (playerSprite == null)
+            playerSprite = GetComponentInChildren<SpriteRenderer>();
+        
+        if (playerSprite != null && playerTransform != null)
+        {
+            // Determine if mouse is to the left or right of player
+            bool mouseIsLeft = mousePosition.x < playerTransform.position.x;
+            
+            // Update player facing direction
+            playerSprite.flipX = mouseIsLeft;
+        }
     }
     
     private void CreateDaggerStrike()
