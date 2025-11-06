@@ -38,8 +38,14 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Sprite fallingSprite;
     [SerializeField] private float animationSpeed = 0.2f; // Time between frame changes
 
+    [Header("Particle Effects")]
+    [SerializeField] private ParticleSystem waterParticles; // Particles when the player lands in water
+    ParticleSystem waterParticlesInstance;
+    [SerializeField] private float minFallSpeedForSplash = 4f; // Minimum downwards speed needed to make a splash
+
     // Components
     private Rigidbody2D rb;
+    [Header("Collider")]
     [SerializeField] private CapsuleCollider2D playerCollider;
     private SpriteRenderer spriteRenderer;
 
@@ -527,6 +533,12 @@ public class PlayerMovement : MonoBehaviour
     {
         if (enteringWater)
         {
+            // Spawn Water Particles if player is moving down fast enough
+            if (rb.linearVelocity.y < -minFallSpeedForSplash)
+            {
+                waterParticlesInstance = Instantiate(waterParticles, new Vector3(transform.position.x, transform.position.y - (playerCollider.size.y * transform.localScale.y) * 0.5f, transform.position.z), Quaternion.Euler(0, 0, 60));
+            }
+
             // Increment water object counter
             waterObjectCount++;
             
