@@ -22,6 +22,12 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxFallDamageHeight = 15f; // Height that causes instant death
     [SerializeField] private int maxFallDamage = 80; // Maximum damage before instant death
     
+    [Header("Health Regeneration")]
+    [SerializeField] private bool enableHealthRegeneration = true;
+    [SerializeField] private float healthRegenDelay = 3f; // Time to wait after taking damage before regenerating
+    [SerializeField] private float healthRegenRate = 2f; // Health points per second
+    [SerializeField] private float healthRegenInterval = 0.5f; // How often to regenerate (in seconds)
+    
     [Header("Health Bar")]
     [SerializeField] private Vector3 healthBarOffset = new Vector3(0, 1.5f, 0); // Offset above player
     [SerializeField] private Vector2 healthBarSize = new Vector2(2f, 0.3f); // Width and height of health bar
@@ -35,7 +41,7 @@ public class PlayerMovement : MonoBehaviour
 
     // Components
     private Rigidbody2D rb;
-    [SerializeField] private BoxCollider2D playerCollider;
+    [SerializeField] private CapsuleCollider2D playerCollider;
     private SpriteRenderer spriteRenderer;
 
     // Input
@@ -57,6 +63,11 @@ public class PlayerMovement : MonoBehaviour
     private int currentHealth;
     private Vector3 spawnPosition;
     
+    // Health Regeneration System
+    private float lastDamageTime;
+    private float lastRegenTime;
+    private bool isRegenerating = false;
+    
     // Fall Damage System
     private bool isFalling = false;
     private float fallStartHeight;
@@ -69,6 +80,7 @@ public class PlayerMovement : MonoBehaviour
     private float originalJumpForce;
     private float originalGravityScale;
     private float timeInWater = 0f;
+    private int waterObjectCount = 0; // Track how many water objects player is in
     
     // Health Bar UI
     private Canvas healthBarCanvas;
@@ -78,7 +90,14 @@ public class PlayerMovement : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        playerCollider = GetComponent<BoxCollider2D>();
+        playerCollider = GetComponent<CapsuleCollider2D>();
+        
+        // Ensure we have a capsule collider
+        if (playerCollider == null)
+        {
+            playerCollider = gameObject.AddComponent<CapsuleCollider2D>();
+            playerCollider.direction = CapsuleDirection2D.Vertical;
+        }
         
         // Try to get SpriteRenderer from child object first, then from this object
         spriteRenderer = GetComponentInChildren<SpriteRenderer>();
@@ -88,7 +107,11 @@ public class PlayerMovement : MonoBehaviour
         // Prevent player from rotating when falling off edges
         rb.freezeRotation = true;
         
-        // Initialize health system
+        // Improve slope handling with physics material
+        PhysicsMaterial2D slopeMaterial = new PhysicsMaterial2D("PlayerSlopeMaterial");
+        slopeMaterial.friction = 0.4f; // Moderate friction for slopes
+        slopeMaterial.bounciness = 0f; // No bouncing
+        playerCollider.sharedMaterial = slopeMaterial;        // Initialize health system
         currentHealth = maxHealth;
         spawnPosition = transform.position;
         
@@ -109,10 +132,11 @@ public class PlayerMovement : MonoBehaviour
         HandleFallDamage();
         HandleWaterPhysics();
         HandleMovement();
+        HandleHealthRegeneration();
         UpdateSprite();
         UpdateHealthBarPosition();
     }
-
+    
     private void GetInput()
     {
         // Use new Input System
@@ -128,10 +152,10 @@ public class PlayerMovement : MonoBehaviour
             leftInput = Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed;
             rightInput = Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed;
             downInput = Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed;
-            // Jump - spacebar, W key, and up arrow
-            jumpInput = Keyboard.current.spaceKey.isPressed ||
-                       Keyboard.current.wKey.isPressed ||
-                       Keyboard.current.upArrowKey.isPressed;
+            // Jump - spacebar, W key, and up arrow (use wasPressedThisFrame for better jump responsiveness)
+            jumpInput = Keyboard.current.spaceKey.wasPressedThisFrame ||
+                       Keyboard.current.wKey.wasPressedThisFrame ||
+                       Keyboard.current.upArrowKey.wasPressedThisFrame;
             
             // Set horizontal input
             if (leftInput)
@@ -173,20 +197,29 @@ public class PlayerMovement : MonoBehaviour
         }
         
         // Jumping/Swimming
-        if (jumpInput)
+        if (inWater)
         {
-            if (inWater)
+            // Check if W or Up is being held for continuous swimming
+            bool swimUpInput = false;
+            if (Keyboard.current != null)
             {
-                // Swimming upward
+                swimUpInput = Keyboard.current.wKey.isPressed || 
+                             Keyboard.current.upArrowKey.isPressed ||
+                             Keyboard.current.spaceKey.isPressed;
+            }
+            
+            if (swimUpInput)
+            {
+                // Continuous swimming upward when holding swim keys
                 float swimForce = currentWaterProperties != null ? 
                     originalJumpForce * currentWaterProperties.jumpForceModifier : originalJumpForce * 0.8f;
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, swimForce);
             }
-            else if (isGrounded && hasCeilingClearance)
-            {
-                // Normal jumping - only if we have ceiling clearance
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-            }
+        }
+        else if (jumpInput && isGrounded && hasCeilingClearance)
+        {
+            // Normal jumping - only if we have ceiling clearance
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
         
         // Drop down through one-way platform
@@ -198,37 +231,48 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckGrounded()
     {
-        Vector2 boxCenter = (Vector2)transform.position + (Vector2)(playerCollider.offset * transform.localScale.y);
+        Vector2 colliderCenter = (Vector2)transform.position + (Vector2)(playerCollider.offset * transform.localScale.y);
         float checkDistance = groundCheckDistance;
         
         // Account for scaling when calculating the effective collider dimensions
         float scaledPlayerWidth = playerCollider.size.x * transform.localScale.x;
         float scaledPlayerHeight = playerCollider.size.y * transform.localScale.y;
         
-        // Create multiple ground check positions across the player's width, accounting for scale
-        Vector2 leftCheckPos = new Vector2(boxCenter.x - scaledPlayerWidth * 0.4f, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
-        Vector2 centerCheckPos = new Vector2(boxCenter.x, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
-        Vector2 rightCheckPos = new Vector2(boxCenter.x + scaledPlayerWidth * 0.4f, boxCenter.y - (scaledPlayerHeight * 0.5f) - 0.05f);
+        // For capsule collider, calculate the actual bottom position
+        // The capsule extends from center by half its height, then we need to account for the rounded ends
+        float halfHeight = scaledPlayerHeight * 0.5f;
+        float bottomY = colliderCenter.y - halfHeight;
+        
+        // Create multiple ground check positions across the player's width
+        Vector2 leftCheckPos = new Vector2(colliderCenter.x - scaledPlayerWidth * 0.3f, bottomY - 0.05f);
+        Vector2 centerCheckPos = new Vector2(colliderCenter.x, bottomY - 0.05f);
+        Vector2 rightCheckPos = new Vector2(colliderCenter.x + scaledPlayerWidth * 0.3f, bottomY - 0.05f);
         
         // Check ground at multiple points
         bool leftGrounded = CheckGroundAtPosition(leftCheckPos, checkDistance);
         bool centerGrounded = CheckGroundAtPosition(centerCheckPos, checkDistance);
         bool rightGrounded = CheckGroundAtPosition(rightCheckPos, checkDistance);
         
-        // Player is grounded if ANY of the check points hit ground
-        isGrounded = leftGrounded || centerGrounded || rightGrounded;
+        // Additional check using OverlapBox for better tilemap detection
+        Vector2 overlapBoxCenter = new Vector2(colliderCenter.x, bottomY - checkDistance * 0.5f);
+        Vector2 overlapBoxSize = new Vector2(scaledPlayerWidth * 0.8f, checkDistance);
+        Collider2D groundCollider = Physics2D.OverlapBox(overlapBoxCenter, overlapBoxSize, 0f, groundLayerMask);
+        bool overlapGrounded = groundCollider != null && groundCollider != playerCollider && groundCollider.gameObject != gameObject;
+        
+        // Player is grounded if ANY of the check points hit ground OR the overlap box detects ground
+        isGrounded = leftGrounded || centerGrounded || rightGrounded || overlapGrounded;
     }
     
     private void CheckCeilingClearance()
     {
-        Vector2 boxCenter = (Vector2)transform.position + (Vector2)(playerCollider.offset * transform.localScale.y);
+        Vector2 colliderCenter = (Vector2)transform.position + (Vector2)(playerCollider.offset * transform.localScale.y);
         
         // Account for scaling when calculating the effective collider dimensions
         float scaledPlayerWidth = playerCollider.size.x * transform.localScale.x;
         float scaledPlayerHeight = playerCollider.size.y * transform.localScale.y;
         
         // Check if player is inside a solid object by detecting overlaps
-        Bounds playerBounds = new Bounds(boxCenter, new Vector3(scaledPlayerWidth * 0.9f, scaledPlayerHeight * 0.9f, 0));
+        Bounds playerBounds = new Bounds(colliderCenter, new Vector3(scaledPlayerWidth * 0.9f, scaledPlayerHeight * 0.9f, 0));
         
         // Get all colliders that overlap with the player
         Collider2D[] overlappingColliders = Physics2D.OverlapAreaAll(
@@ -263,6 +307,14 @@ public class PlayerMovement : MonoBehaviour
     
     private void HandleFallDamage()
     {
+        // Don't track fall damage while in water
+        if (inWater)
+        {
+            isFalling = false;
+            wasGroundedLastFrame = isGrounded;
+            return;
+        }
+        
         // Check if we just started falling
         if (wasGroundedLastFrame && !isGrounded && rb.linearVelocity.y <= 0)
         {
@@ -313,12 +365,56 @@ public class PlayerMovement : MonoBehaviour
         currentHealth -= damage;
         currentHealth = Mathf.Max(0, currentHealth);
         
+        // Record damage time for regeneration system
+        lastDamageTime = Time.time;
+        isRegenerating = false;
+        
         // Update health bar display
         UpdateHealthBar();
         
         if (currentHealth <= 0)
         {
             Die();
+        }
+    }
+    
+    private void HandleHealthRegeneration()
+    {
+        // Don't regenerate if system is disabled, health is full, or player is dead
+        if (!enableHealthRegeneration || currentHealth >= maxHealth || currentHealth <= 0)
+        {
+            return;
+        }
+        
+        // Check if enough time has passed since last damage
+        if (Time.time - lastDamageTime >= healthRegenDelay)
+        {
+            // Check if enough time has passed since last regeneration tick
+            if (!isRegenerating || Time.time - lastRegenTime >= healthRegenInterval)
+            {
+                if (!isRegenerating)
+                {
+                    isRegenerating = true;
+                    lastRegenTime = Time.time;
+                }
+                
+                // Regenerate health
+                int healthToRegenerate = Mathf.RoundToInt(healthRegenRate * healthRegenInterval);
+                currentHealth += healthToRegenerate;
+                currentHealth = Mathf.Min(currentHealth, maxHealth);
+                
+                // Update health bar
+                UpdateHealthBar();
+                
+                // Update last regeneration time
+                lastRegenTime = Time.time;
+                
+                // Stop regenerating if health is full
+                if (currentHealth >= maxHealth)
+                {
+                    isRegenerating = false;
+                }
+            }
         }
     }
     
@@ -331,22 +427,56 @@ public class PlayerMovement : MonoBehaviour
     // Public method for water state management
     public void SetWaterState(bool enteringWater, WaterProperties properties = null)
     {
-        inWater = enteringWater;
-        
-        if (enteringWater && properties != null)
+        if (enteringWater)
         {
-            currentWaterProperties = properties;
-            // Apply water physics modifications
-            rb.gravityScale = originalGravityScale * properties.gravityModifier;
-            timeInWater = 0f;
+            // Increment water object counter
+            waterObjectCount++;
+            
+            // Only set up water physics if this is the first water object
+            if (waterObjectCount == 1)
+            {
+                inWater = true;
+                timeInWater = 0f;
+                
+                // Reset fall damage tracking when entering water
+                isFalling = false;
+                fallStartHeight = 0f;
+            }
+            
+            // Update water properties (use the most recent properties)
+            if (properties != null)
+            {
+                currentWaterProperties = properties;
+                // Apply water physics modifications
+                rb.gravityScale = originalGravityScale * properties.gravityModifier;
+            }
         }
-        else if (!enteringWater)
+        else
         {
-            // Restore normal physics
-            currentWaterProperties = null;
-            rb.gravityScale = originalGravityScale;
-            timeInWater = 0f;
+            // Decrement water object counter
+            waterObjectCount = Mathf.Max(0, waterObjectCount - 1);
+            
+            // Only disable water physics when exiting ALL water objects
+            if (waterObjectCount == 0)
+            {
+                inWater = false;
+                
+                // Restore normal physics
+                currentWaterProperties = null;
+                rb.gravityScale = originalGravityScale;
+                timeInWater = 0f;
+                
+                // Reset fall tracking when exiting water to prevent false fall damage
+                isFalling = false;
+                wasGroundedLastFrame = false;
+            }
         }
+    }
+    
+    // Public method to get current water object count (for debugging)
+    public int GetWaterObjectCount()
+    {
+        return waterObjectCount;
     }
     
     private void HandleWaterPhysics()
@@ -428,6 +558,13 @@ public class PlayerMovement : MonoBehaviour
         // Reset fall tracking
         isFalling = false;
         wasGroundedLastFrame = false;
+        
+        // Reposition camera directly on player after respawn
+        CameraFollow cameraFollow = Camera.main?.GetComponent<CameraFollow>();
+        if (cameraFollow != null)
+        {
+            cameraFollow.CenterOnTarget();
+        }
     }
     
     private void CreateHealthBar()
@@ -525,6 +662,9 @@ public class PlayerMovement : MonoBehaviour
     
     private bool CheckGroundAtPosition(Vector2 position, float distance)
     {
+        // Use multiple detection methods for better compatibility with tilemaps
+        
+        // Method 1: Raycast detection
         RaycastHit2D[] hits = Physics2D.RaycastAll(position, Vector2.down, distance, groundLayerMask);
         
         foreach (RaycastHit2D hit in hits)
@@ -554,6 +694,21 @@ public class PlayerMovement : MonoBehaviour
                     return true;
                 }
             }
+        }
+        
+        // Method 2: Point overlap detection (good for composite colliders)
+        Vector2 pointCheckPos = position + Vector2.down * (distance * 0.5f);
+        Collider2D pointHit = Physics2D.OverlapPoint(pointCheckPos, groundLayerMask);
+        if (pointHit != null && pointHit != playerCollider && pointHit.gameObject != gameObject)
+        {
+            return true;
+        }
+        
+        // Method 3: Small circle overlap detection - better for CapsuleCollider2D
+        Collider2D circleHit = Physics2D.OverlapCircle(position + Vector2.down * (distance * 0.5f), 0.1f, groundLayerMask);
+        if (circleHit != null && circleHit != playerCollider && circleHit.gameObject != gameObject)
+        {
+            return true;
         }
         
         return false;

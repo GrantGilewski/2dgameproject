@@ -756,7 +756,7 @@ public class EnvironmentCheckpoint : MonoBehaviour, IObjectBehavior
 public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
 {
     [Header("Falling Platform Settings")]
-    public float fallDelay = 0.5f;           // Time before platform starts falling after player lands
+    public float fallDelay = 0.1f;           // Time before platform starts falling after player lands (reduced from 0.5f)
     public float fallSpeed = 10f;            // Speed at which platform falls
     public float respawnTime = 5f;           // Time before platform respawns
     public LayerMask groundLayerMask = -1;   // What layers count as ground for the platform to land on
@@ -953,7 +953,7 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
                 {
                     hasLanded = true;
                     copyRigidbody.linearVelocity = Vector2.zero;
-                    copyRigidbody.isKinematic = true;
+                    copyRigidbody.bodyType = RigidbodyType2D.Kinematic;
                 }
             }
             
