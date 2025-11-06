@@ -194,6 +194,13 @@ public class PlayerMovement : MonoBehaviour
         float currentMoveSpeed = inWater && currentWaterProperties != null ? 
             originalMoveSpeed * currentWaterProperties.speedModifier : moveSpeed;
         
+        // Reduce movement speed while charging ValorShard attack
+        bool isChargingValor = weaponController != null && weaponController.IsChargingValorAttack;
+        if (isChargingValor)
+        {
+            currentMoveSpeed *= 0.3f; // Reduce speed to 30% while charging
+        }
+        
         float targetVelocityX = horizontalInput * currentMoveSpeed;
         
         // Apply water current if in water

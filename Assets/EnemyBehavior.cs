@@ -49,11 +49,18 @@ public class EnemyBehavior : MonoBehaviour
     private float lastDamageTime = 0f;
     private DamageObject currentDamageObject;
     
-    // Health Bar UI
+    // Public Properties
+    public bool IsDead => isDead;
+    
+        // Health Bar UI
     private Canvas healthBarCanvas;
     private Image healthBarBackground;
     private Image healthBarFill;
-    private Text respawnTimerText; // New: For showing respawn countdown
+    private GameObject healthBarObject;
+    private float targetFillAmount = 1f; // Target fill amount for smooth animation
+    private float currentFillAmount = 1f; // Current animated fill amount
+    private float healthBarAnimationSpeed = 3f; // Speed of health bar animation
+    private Text respawnTimerText; // Timer text for respawn countdown
     
     void Start()
     {
@@ -105,6 +112,10 @@ public class EnemyBehavior : MonoBehaviour
         currentHealth = maxHealth;
         spawnPosition = transform.position;
         
+        // Initialize health bar animation values
+        targetFillAmount = 1f;
+        currentFillAmount = 1f;
+        
         // Store original color
         if (spriteRenderer != null)
         {
@@ -135,6 +146,7 @@ public class EnemyBehavior : MonoBehaviour
         if (!ValidateComponents()) return;
         
         UpdateHealthBarPosition();
+        UpdateHealthBar(); // Animate health bar continuously
         
         // Handle continuous damage while in damage zone
         if (inDamageZone && currentDamageObject != null)
@@ -283,10 +295,10 @@ public class EnemyBehavior : MonoBehaviour
         float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
         
         // Check if player is within detection radius
-        if (distanceToPlayer <= detectionRadius)
+        playerInRange = distanceToPlayer <= detectionRadius;
+        
+        if (playerInRange)
         {
-            playerInRange = true;
-            
             // Follow player if not in attack range
             if (distanceToPlayer > attackRange)
             {
@@ -312,7 +324,6 @@ public class EnemyBehavior : MonoBehaviour
         }
         else
         {
-            playerInRange = false;
             // Stop moving when player is out of range
             if (rb != null)
             {
@@ -517,6 +528,10 @@ public class EnemyBehavior : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
         
+        // Reset health bar animation values
+        targetFillAmount = 1f;
+        currentFillAmount = 1f;
+        
         // Ensure rigidbody is still valid and reset its velocity
         if (rb == null)
         {
@@ -597,7 +612,17 @@ public class EnemyBehavior : MonoBehaviour
         fillGO.transform.SetParent(canvasGO.transform, false);
         
         healthBarFill = fillGO.AddComponent<Image>();
+        
+        // Create a white sprite for the fill (same as player)
+        Texture2D fillTexture = new Texture2D(1, 1);
+        fillTexture.SetPixel(0, 0, Color.white);
+        fillTexture.Apply();
+        healthBarFill.sprite = Sprite.Create(fillTexture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f);
+        
         healthBarFill.color = new Color(0f, 1f, 0f, 0.9f); // Green fill
+        healthBarFill.type = Image.Type.Filled;
+        healthBarFill.fillMethod = Image.FillMethod.Horizontal;
+        healthBarFill.fillOrigin = (int)Image.OriginHorizontal.Left; // Fill from left to right, empty from right to left
         
         RectTransform fillRect = fillGO.GetComponent<RectTransform>();
         fillRect.anchorMin = Vector2.zero;
@@ -650,19 +675,23 @@ public class EnemyBehavior : MonoBehaviour
         {
             float healthPercentage = isDead ? 0f : (float)currentHealth / maxHealth;
             
-            // Update fill amount
-            healthBarFill.fillAmount = healthPercentage;
+            // Set target fill amount for smooth animation
+            targetFillAmount = healthPercentage;
             
-            // Update fill color based on health percentage
+            // Animate the fill amount smoothly using Lerp
+            currentFillAmount = Mathf.Lerp(currentFillAmount, targetFillAmount, healthBarAnimationSpeed * Time.deltaTime);
+            healthBarFill.fillAmount = currentFillAmount;
+            
+            // Update fill color based on health percentage (use target for immediate color response)
             if (isDead)
             {
                 healthBarFill.color = new Color(0.3f, 0.3f, 0.3f, 0.9f); // Dark gray when dead
             }
-            else if (healthPercentage > 0.6f)
+            else if (targetFillAmount > 0.6f)
             {
                 healthBarFill.color = new Color(0f, 1f, 0f, 0.9f); // Green
             }
-            else if (healthPercentage > 0.3f)
+            else if (targetFillAmount > 0.3f)
             {
                 healthBarFill.color = new Color(1f, 1f, 0f, 0.9f); // Yellow
             }
