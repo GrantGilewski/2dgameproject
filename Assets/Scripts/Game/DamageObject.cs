@@ -16,11 +16,20 @@ public class DamageObject : MonoBehaviour
     [Tooltip("Apply damage when player collides")]
     [SerializeField] private bool damageOnCollision = true;
     
+    [Tooltip("If true, this damage object will not damage objects on the Player layer")]
+    [SerializeField] private bool excludePlayerLayer = false;
+    
+    [Tooltip("If true, this damage object can damage enemies")]
+    public bool canDamageEnemies = true;
+    
 
     
     private bool playerInside = false;
+    private bool enemyInside = false;
     private float lastDamageTime = -1f;
+    private float lastEnemyDamageTime = -1f;
     private PlayerMovement playerMovement;
+    private EnemyBehavior currentEnemy;
     
     void Start()
     {
@@ -45,7 +54,13 @@ public class DamageObject : MonoBehaviour
         // Apply continuous damage while player is inside
         if (playerInside && Time.time - lastDamageTime >= damageRate)
         {
-            DealDamage();
+            DealDamageToPlayer();
+        }
+        
+        // Apply continuous damage while enemy is inside
+        if (enemyInside && canDamageEnemies && Time.time - lastEnemyDamageTime >= damageRate)
+        {
+            DealDamageToEnemy();
         }
     }
     
@@ -53,8 +68,20 @@ public class DamageObject : MonoBehaviour
     {
         if (damageOnTrigger && other.CompareTag("Player"))
         {
+            // Check if we should exclude player layer
+            if (excludePlayerLayer && other.gameObject.layer == LayerMask.NameToLayer("Player"))
+            {
+                return; // Don't damage player layer objects
+            }
+            
             playerInside = true;
-            DealDamage();
+            DealDamageToPlayer();
+        }
+        else if (damageOnTrigger && canDamageEnemies && other.GetComponent<EnemyBehavior>() != null)
+        {
+            enemyInside = true;
+            currentEnemy = other.GetComponent<EnemyBehavior>();
+            DealDamageToEnemy();
         }
     }
     
@@ -64,14 +91,31 @@ public class DamageObject : MonoBehaviour
         {
             playerInside = false;
         }
+        else if (damageOnTrigger && other.GetComponent<EnemyBehavior>() != null)
+        {
+            enemyInside = false;
+            currentEnemy = null;
+        }
     }
     
     void OnCollisionEnter2D(Collision2D collision)
     {
         if (damageOnCollision && collision.gameObject.CompareTag("Player"))
         {
+            // Check if we should exclude player layer
+            if (excludePlayerLayer && collision.gameObject.layer == LayerMask.NameToLayer("Player"))
+            {
+                return; // Don't damage player layer objects
+            }
+            
             playerInside = true; // Set playerInside so continuous damage works
-            DealDamage();
+            DealDamageToPlayer();
+        }
+        else if (damageOnCollision && canDamageEnemies && collision.gameObject.GetComponent<EnemyBehavior>() != null)
+        {
+            enemyInside = true;
+            currentEnemy = collision.gameObject.GetComponent<EnemyBehavior>();
+            DealDamageToEnemy();
         }
     }
     
@@ -81,9 +125,14 @@ public class DamageObject : MonoBehaviour
         {
             playerInside = false; // Stop continuous damage
         }
+        else if (damageOnCollision && collision.gameObject.GetComponent<EnemyBehavior>() != null)
+        {
+            enemyInside = false;
+            currentEnemy = null;
+        }
     }
     
-    private void DealDamage()
+    private void DealDamageToPlayer()
     {
         if (playerMovement != null && Time.time - lastDamageTime >= damageRate)
         {
@@ -92,12 +141,25 @@ public class DamageObject : MonoBehaviour
         }
     }
     
+    private void DealDamageToEnemy()
+    {
+        if (currentEnemy != null && Time.time - lastEnemyDamageTime >= damageRate)
+        {
+            currentEnemy.TakeDamage(damageAmount);
+            lastEnemyDamageTime = Time.time;
+        }
+    }
+    
     /// <summary>
     /// Public method to deal damage externally (useful for scripted events)
     /// </summary>
     public void TriggerDamage()
     {
-        DealDamage();
+        DealDamageToPlayer();
+        if (canDamageEnemies)
+        {
+            DealDamageToEnemy();
+        }
     }
     
     /// <summary>
