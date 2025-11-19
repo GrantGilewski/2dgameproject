@@ -6,7 +6,7 @@ public class OptionsMenu : MonoBehaviour
 
     public void OpenOptions()
     {
-        Debug.Log("OpenOptions called!");
+        LogManager.instance.log("OpenOptions called!",LogManager.DEBUG);
         OptionsPanel.SetActive(true);
     }
 

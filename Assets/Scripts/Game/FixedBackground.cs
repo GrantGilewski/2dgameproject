@@ -26,7 +26,7 @@ public class FixedBackground : MonoBehaviour
         thisCamera = GetComponent<Camera>();
         if (thisCamera == null)
         {
-            Debug.LogError("FixedBackground: This script must be attached to a Camera!");
+            LogManager.instance.log("FixedBackground: This script must be attached to a Camera!",LogManager.ERROR);
             return;
         }
         
@@ -36,7 +36,7 @@ public class FixedBackground : MonoBehaviour
             if (backgroundSpriteRenderer != null)
             {
                 backgroundSprite = backgroundSpriteRenderer.transform;
-                Debug.Log("FixedBackground: Found background sprite: " + backgroundSprite.name);
+                LogManager.instance.log("FixedBackground: Found background sprite: " + backgroundSprite.name, LogManager.DEBUG);
             }
         }
         else
@@ -46,7 +46,7 @@ public class FixedBackground : MonoBehaviour
         
         if (backgroundSprite == null || backgroundSpriteRenderer == null)
         {
-            Debug.LogError("FixedBackground: No background sprite found as child of camera!");
+            LogManager.instance.log("FixedBackground: No background sprite found as child of camera!", LogManager.ERROR);
             return;
         }
         
@@ -96,8 +96,8 @@ public class FixedBackground : MonoBehaviour
         float scale = Mathf.Max(scaleX, scaleY);
         
         backgroundSprite.localScale = Vector3.one * scale;
-        
-        Debug.Log("Background scaled to " + scale + " to cover camera view");
+
+        LogManager.instance.log("Background scaled to " + scale + " to cover camera view",LogManager.INFO);
     }
     
     private void UpdateBackgroundPosition()

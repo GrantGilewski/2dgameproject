@@ -40,7 +40,7 @@ public class ObjectBehaviorController : MonoBehaviour
         
         if (playerMovement == null)
         {
-            Debug.LogError("ObjectBehaviorController: No PlayerMovement found in scene!");
+            LogManager.instance.log("ObjectBehaviorController: No PlayerMovement found in scene!", LogManager.ERROR);
         }
         
         // Set up all objects in the scene
@@ -97,7 +97,7 @@ public class ObjectBehaviorController : MonoBehaviour
         }
         catch (UnityException e)
         {
-            Debug.LogWarning($"Tag '{tag}' is not defined in Unity's Tag Manager. Skipping setup for {componentType.Name}. Error: {e.Message}");
+            LogManager.instance.log($"Tag '{tag}' is not defined in Unity's Tag Manager. Skipping setup for {componentType.Name}. Error: {e.Message}",LogManager.WARNING);
         }
     }
     
@@ -192,19 +192,19 @@ public class ObjectBehaviorController : MonoBehaviour
     
     public void HandleSwitchActivation(GameObject switchObj)
     {
-        Debug.Log($"Switch activated: {switchObj.name}");
+        LogManager.instance.log($"Switch activated: {switchObj.name}", LogManager.INFO);
     }
     
     public void HandleTriggerActivation(GameObject trigger)
     {
-        Debug.Log($"Trigger activated: {trigger.name}");
+        LogManager.instance.log($"Trigger activated: {trigger.name}", LogManager.INFO);
     }
     
     public void HandleTeleporter(GameObject teleporter, GameObject destination)
     {
         if (playerMovement != null)
         {
-            Debug.Log($"Teleporter used: {teleporter.name} -> {destination?.name ?? "Unknown"}");
+            LogManager.instance.log($"Teleporter used: {teleporter.name} -> {destination?.name ?? "Unknown"}", LogManager.INFO);
         }
     }
     
@@ -212,7 +212,7 @@ public class ObjectBehaviorController : MonoBehaviour
     {
         if (playerMovement != null)
         {
-            Debug.Log($"Checkpoint reached: {checkpoint.name}");
+            LogManager.instance.log($"Checkpoint reached: {checkpoint.name}", LogManager.INFO);
         }
     }
 }
@@ -508,7 +508,7 @@ public class EnvironmentDoor : MonoBehaviour, IObjectBehavior
     {
         if (innerDoorSprite == null) 
         {
-            Debug.LogError("Inner door sprite is null!");
+            LogManager.instance.log("Inner door sprite is null!", LogManager.ERROR);
             yield break;
         }
         

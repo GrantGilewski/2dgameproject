@@ -136,7 +136,7 @@ public class EnemyBehavior : MonoBehaviour
         // Create health bar
         CreateHealthBar();
         
-        Debug.Log($"Enemy {gameObject.name} initialized at {spawnPosition} with {maxHealth} health. Aggressive: {isAggressive}");
+        LogManager.instance.log($"Enemy {gameObject.name} initialized at {spawnPosition} with {maxHealth} health. Aggressive: {isAggressive}",LogManager.INFO);
     }
     
     void Update()
@@ -189,7 +189,7 @@ public class EnemyBehavior : MonoBehaviour
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error processing damage for {gameObject.name}: {e.Message}");
+                LogManager.instance.log($"Error processing damage for {gameObject.name}: {e.Message}",LogManager.ERROR);
                 // Clean up on error
                 inDamageZone = false;
                 currentDamageObject = null;
@@ -205,7 +205,7 @@ public class EnemyBehavior : MonoBehaviour
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error in HandleAggression for {gameObject.name}: {e.Message}");
+                LogManager.instance.log($"Error in HandleAggression for {gameObject.name}: {e.Message}", LogManager.ERROR);
             }
         }
     }
@@ -443,7 +443,7 @@ public class EnemyBehavior : MonoBehaviour
             if (playerCollider != null && enemyCollider != null)
             {
                 Physics2D.IgnoreCollision(enemyCollider, playerCollider, true);
-                Debug.Log($"Enemy {gameObject.name} - Collision with player disabled");
+                LogManager.instance.log($"Enemy {gameObject.name} - Collision with player disabled",LogManager.DEBUG);
             }
         }
     }
@@ -472,7 +472,7 @@ public class EnemyBehavior : MonoBehaviour
         if (isDead) return;
         
         isDead = true;
-        Debug.Log($"Enemy {gameObject.name} died");
+        LogManager.instance.log($"Enemy {gameObject.name} died", LogManager.DEBUG);
         
         // Stop all movement when dead
         if (rb != null)
@@ -530,7 +530,7 @@ public class EnemyBehavior : MonoBehaviour
     
     private void Respawn()
     {
-        Debug.Log($"Enemy {gameObject.name} respawning");
+        LogManager.instance.log($"Enemy {gameObject.name} respawning", LogManager.DEBUG);
         
         // Reset position to spawn point
         transform.position = spawnPosition;

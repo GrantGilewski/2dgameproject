@@ -105,7 +105,7 @@ public class WeaponClassController : MonoBehaviour
         
         if (playerMovement == null)
         {
-            Debug.LogError("WeaponClassController must be attached to the same GameObject as PlayerMovement!");
+            LogManager.instance.log("WeaponClassController must be attached to the same GameObject as PlayerMovement!", LogManager.ERROR);
             enabled = false;
             return;
         }
@@ -164,8 +164,8 @@ public class WeaponClassController : MonoBehaviour
         
         // Create active slot indicator
         CreateActiveSlotIndicator(slotContainer);
-        
-        Debug.Log("Weapon GUI initialized");
+
+        LogManager.instance.log("Weapon GUI initialized", LogManager.INFO);
     }
     
     private void CreateWeaponSlot(GameObject parent, int slotIndex)
@@ -473,8 +473,8 @@ public class WeaponClassController : MonoBehaviour
         }
         
         HideInteractionPrompt();
-        
-        Debug.Log($"Equipped {shardType} in slot {emptySlot}");
+
+        LogManager.instance.log($"Equipped {shardType} in slot {emptySlot}", LogManager.INFO);
     }
     
     private void SwitchToSlot(int slotIndex)
@@ -483,11 +483,11 @@ public class WeaponClassController : MonoBehaviour
         {
             activeSlotIndex = slotIndex;
             UpdateActiveSlotIndicator();
-            Debug.Log($"Switched to slot {slotIndex}: {equippedShards[slotIndex]}");
+            LogManager.instance.log($"Switched to slot {slotIndex}: {equippedShards[slotIndex]}", LogManager.INFO);
         }
         else if (equippedShards[slotIndex] == ShardType.None)
         {
-            Debug.Log($"Slot {slotIndex} is empty, cannot switch to it");
+            LogManager.instance.log($"Slot {slotIndex} is empty, cannot switch to it", LogManager.INFO);
         }
     }
     
@@ -507,7 +507,7 @@ public class WeaponClassController : MonoBehaviour
                 UseStormShard(isRightClick);
                 break;
             default:
-                Debug.Log("No weapon equipped in active slot");
+                LogManager.instance.log("No weapon equipped in active slot", LogManager.INFO);
                 break;
         }
     }
@@ -838,11 +838,11 @@ public class WeaponClassController : MonoBehaviour
         if (particlePoint != null)
         {
             stormParticlePoint = particlePoint.gameObject;
-            Debug.Log("Found SSParticlePoint at: " + particlePoint.position);
+            LogManager.instance.log("Found SSParticlePoint at: " + particlePoint.position, LogManager.DEBUG);
         }
         else
         {
-            Debug.LogError("SSParticlePoint not found! Please create an empty GameObject named 'SSParticlePoint' as a child of the player.");
+            LogManager.instance.log("SSParticlePoint not found! Please create an empty GameObject named 'SSParticlePoint' as a child of the player.", LogManager.ERROR);
             // Create a fallback point
             stormParticlePoint = new GameObject("SSParticlePoint_Fallback");
             stormParticlePoint.transform.SetParent(transform);
@@ -1083,7 +1083,7 @@ public class WeaponClassController : MonoBehaviour
         GameObject nearestEnemy = FindNearestEnemy(lightningRange);
         if (nearestEnemy == null)
         {
-            Debug.Log("No enemy in range for electric arc");
+            LogManager.instance.log("No enemy in range for electric arc", LogManager.DEBUG);
             return;
         }
         
@@ -1093,7 +1093,7 @@ public class WeaponClassController : MonoBehaviour
         // Check for obstacles between player and enemy
         if (IsPathBlocked(startPos, endPos))
         {
-            Debug.Log("Electric arc blocked by terrain");
+            LogManager.instance.log("Electric arc blocked by terrain", LogManager.DEBUG);
             return;
         }
         
@@ -1108,7 +1108,7 @@ public class WeaponClassController : MonoBehaviour
         GameObject nearestEnemy = FindNearestEnemy(boltRange);
         if (nearestEnemy == null)
         {
-            Debug.Log("No enemy in range for lightning bolt");
+            LogManager.instance.log("No enemy in range for lightning bolt", LogManager.DEBUG);
             return;
         }
         
@@ -1118,7 +1118,7 @@ public class WeaponClassController : MonoBehaviour
         // Check if ground position is blocked by terrain
         if (IsGroundBlocked(groundPosition))
         {
-            Debug.Log("Lightning bolt blocked by terrain");
+            LogManager.instance.log("Lightning bolt blocked by terrain", LogManager.DEBUG);
             return;
         }
         
@@ -1343,7 +1343,7 @@ public class WeaponClassController : MonoBehaviour
             CompositeCollider2D compositeCollider = hit.collider.GetComponent<CompositeCollider2D>();
             if (compositeCollider != null)
             {
-                Debug.Log("Electric arc blocked by CompositeCollider2D: " + hit.collider.name);
+                LogManager.instance.log("Electric arc blocked by CompositeCollider2D: " + hit.collider.name, LogManager.DEBUG);
                 return true;
             }
             
@@ -1352,7 +1352,7 @@ public class WeaponClassController : MonoBehaviour
                 hit.collider.gameObject.name.ToLower().Contains("terrain") ||
                 hit.collider.gameObject.name.ToLower().Contains("tilemap"))
             {
-                Debug.Log("Electric arc blocked by terrain: " + hit.collider.name);
+                LogManager.instance.log("Electric arc blocked by terrain: " + hit.collider.name, LogManager.DEBUG);
                 return true;
             }
         }
@@ -1373,7 +1373,7 @@ public class WeaponClassController : MonoBehaviour
             CompositeCollider2D compositeCollider = groundCollider.GetComponent<CompositeCollider2D>();
             if (compositeCollider != null)
             {
-                Debug.Log("Lightning bolt blocked by CompositeCollider2D: " + groundCollider.name);
+                LogManager.instance.log("Lightning bolt blocked by CompositeCollider2D: " + groundCollider.name, LogManager.DEBUG);
                 return true;
             }
             
@@ -1382,7 +1382,7 @@ public class WeaponClassController : MonoBehaviour
                 groundCollider.gameObject.name.ToLower().Contains("terrain") ||
                 groundCollider.gameObject.name.ToLower().Contains("tilemap"))
             {
-                Debug.Log("Lightning bolt blocked by terrain: " + groundCollider.name);
+                LogManager.instance.log("Lightning bolt blocked by terrain: " + groundCollider.name, LogManager.DEBUG);
                 return true;
             }
         }

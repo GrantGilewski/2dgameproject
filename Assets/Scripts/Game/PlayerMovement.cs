@@ -437,7 +437,7 @@ public class PlayerMovement : MonoBehaviour
             if (fallDistance > minFallDamageHeight)
             {
                 ApplyFallDamage(fallDistance);
-                Debug.Log($"Fall damage applied! Distance: {fallDistance:F1}m, Damage calculated from height {fallStartHeight:F1} to {transform.position.y:F1}");
+                LogManager.instance.log($"Fall damage applied! Distance: {fallDistance:F1}m, Damage calculated from height {fallStartHeight:F1} to {transform.position.y:F1}",LogManager.INFO);
             }
             
             isFalling = false;
@@ -543,7 +543,7 @@ public class PlayerMovement : MonoBehaviour
             }
             else if (waterParticles == null)
             {
-                Debug.LogWarning("Water particles not assigned in PlayerMovement. Please assign a particle system in the inspector.");
+                LogManager.instance.log("Water particles not assigned in PlayerMovement. Please assign a particle system in the inspector.", LogManager.WARNING);
             }
 
             // Increment water object counter
