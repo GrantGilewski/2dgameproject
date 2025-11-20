@@ -70,7 +70,7 @@ public class MainMenu : MonoBehaviour
         if (pendingData != null && PlayerManager.Instance != null)
         {
             PlayerManager.Instance.ApplySaveData(pendingData);
-            Debug.Log("Applied save data after scene load.");
+            LogManager.instance.log("Applied save data after scene load.",LogManager.INFO);
             pendingData = null;
         }
         SceneManager.sceneLoaded -= OnSceneLoaded; // unsubscribe
