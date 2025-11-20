@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Tilemaps;
 using System.Collections;
 
 // Water properties definition (shared between PlayerMovement and ObjectBehaviorController)
@@ -769,6 +770,7 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
     
     private ObjectBehaviorController controller;
     private BoxCollider2D platformCollider;
+    private CompositeCollider2D compositeCollider;
     private SpriteRenderer platformRenderer;
     private Vector3 originalPosition;
     private bool isFalling = false;
@@ -778,60 +780,160 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
     
     public void Initialize(ObjectBehaviorController behaviorController, string objectType)
     {
+        if (gameObject == null || transform == null)
+        {
+            Debug.LogError("FallingPlatform: GameObject or transform is null during initialization!");
+            return;
+        }
+        
         controller = behaviorController;
         originalPosition = transform.position;
         
-        // Get or add required components
+        // Get or add required components - check for CompositeCollider2D first
+        compositeCollider = GetComponent<CompositeCollider2D>();
         platformCollider = GetComponent<BoxCollider2D>();
-        if (platformCollider == null)
-        {
-            platformCollider = gameObject.AddComponent<BoxCollider2D>();
-        }
         
-        // Ensure the collider is NOT a trigger so collision events work
-        platformCollider.isTrigger = false;
+        if (compositeCollider != null)
+        {
+            // Use CompositeCollider2D if available (for tilemaps)
+            compositeCollider.isTrigger = false;
+            Debug.Log("FallingPlatform: Using CompositeCollider2D for tilemap");
+        }
+        else if (platformCollider == null)
+        {
+            // Add BoxCollider2D only if no composite collider exists
+            platformCollider = gameObject.AddComponent<BoxCollider2D>();
+            platformCollider.isTrigger = false;
+        }
+        else
+        {
+            // Ensure existing BoxCollider2D is NOT a trigger
+            platformCollider.isTrigger = false;
+        }
         
         // Add a trigger detector on top for backup detection
         GameObject triggerDetector = new GameObject("FallingPlatformTrigger");
-        triggerDetector.transform.SetParent(transform);
-        triggerDetector.transform.localPosition = new Vector3(0, platformCollider.bounds.size.y / 2 + 0.1f, 0);
+        if (triggerDetector != null && transform != null)
+        {
+            triggerDetector.transform.SetParent(transform);
+        }
+        else
+        {
+            Debug.LogError("FallingPlatform: Failed to create trigger detector or transform is null!");
+            return;
+        }
+        
+        // Get bounds from composite collider or box collider
+        Bounds colliderBounds;
+        if (compositeCollider != null)
+        {
+            colliderBounds = compositeCollider.bounds;
+        }
+        else if (platformCollider != null)
+        {
+            colliderBounds = platformCollider.bounds;
+        }
+        else
+        {
+            Debug.LogError("FallingPlatform: No valid collider found for bounds calculation!");
+            colliderBounds = new Bounds(transform.position, Vector3.one); // Fallback
+        }
+        
+        triggerDetector.transform.localPosition = new Vector3(0, colliderBounds.size.y / 2 + 0.1f, 0);
         
         BoxCollider2D triggerCollider = triggerDetector.AddComponent<BoxCollider2D>();
         triggerCollider.isTrigger = true;
-        triggerCollider.size = new Vector2(platformCollider.bounds.size.x, 0.2f);
+        triggerCollider.size = new Vector2(colliderBounds.size.x, 0.2f);
         
         FallingPlatformTrigger triggerScript = triggerDetector.AddComponent<FallingPlatformTrigger>();
         triggerScript.parentPlatform = this;
         
-        // Ensure original platform doesn't have a Rigidbody2D that could interfere
+        // Configure Rigidbody2D for CompositeCollider2D compatibility
         Rigidbody2D existingRigidbody = GetComponent<Rigidbody2D>();
         if (existingRigidbody != null)
         {
-            Destroy(existingRigidbody);
+            // Keep the rigidbody but make it kinematic (no physics until falling)
+            existingRigidbody.bodyType = RigidbodyType2D.Kinematic;
+            existingRigidbody.gravityScale = 0f;
+            existingRigidbody.freezeRotation = true;
+            platformRigidbody = existingRigidbody;
+        }
+        else
+        {
+            // Add rigidbody if none exists (required for CompositeCollider2D)
+            platformRigidbody = gameObject.AddComponent<Rigidbody2D>();
+            platformRigidbody.bodyType = RigidbodyType2D.Kinematic;
+            platformRigidbody.gravityScale = 0f;
+            platformRigidbody.freezeRotation = true;
         }
         
         platformRenderer = GetComponent<SpriteRenderer>();
-        if (platformRenderer == null)
+        
+        // For tilemap platforms, we don't need to add a SpriteRenderer
+        // The TilemapRenderer handles the visuals
+        if (platformRenderer == null && compositeCollider == null)
         {
+            // Only add SpriteRenderer for non-tilemap platforms
             platformRenderer = gameObject.AddComponent<SpriteRenderer>();
-            // Create a simple white square sprite for the platform if none exists
-            platformRenderer.sprite = CreateSimpleSprite();
-            platformRenderer.color = new Color(0.8f, 0.6f, 0.4f); // Brown platform color
+            if (platformRenderer != null)
+            {
+                // Create a simple white square sprite for the platform if none exists
+                platformRenderer.sprite = CreateSimpleSprite();
+                platformRenderer.color = new Color(0.8f, 0.6f, 0.4f); // Brown platform color
+            }
+            else
+            {
+                Debug.LogError("FallingPlatform: Failed to add SpriteRenderer component!");
+            }
+        }
+        else if (compositeCollider != null)
+        {
+            Debug.Log("FallingPlatform: Tilemap platform detected - skipping SpriteRenderer setup");
         }
     }
     
     private void OnCollisionEnter2D(Collision2D collision)
     {
+        Debug.Log($"FallingPlatform collision detected with: {collision.gameObject.name}, Tag: {collision.gameObject.tag}");
+        Debug.Log($"FallingPlatform state: isFalling={isFalling}, hasPlayerOnTop={hasPlayerOnTop}");
+        
         if (collision.gameObject.CompareTag("Player") && !isFalling && !hasPlayerOnTop)
         {
             // Check if player is landing on top of the platform
             Vector2 contactPoint = collision.contacts[0].point;
-            Vector2 platformTop = new Vector2(transform.position.x, transform.position.y + platformCollider.bounds.size.y / 2);
+            Vector2 playerPosition = collision.gameObject.transform.position;
             
-            if (contactPoint.y >= platformTop.y - 0.1f) // Small tolerance for top detection
+            // Get bounds from the appropriate collider
+            Bounds currentBounds;
+            if (compositeCollider != null)
+            {
+                currentBounds = compositeCollider.bounds;
+            }
+            else if (platformCollider != null)
+            {
+                currentBounds = platformCollider.bounds;
+            }
+            else
+            {
+                Debug.LogError("FallingPlatform: No valid collider found!");
+                return;
+            }
+            
+            Vector2 platformTop = new Vector2(transform.position.x, transform.position.y + currentBounds.size.y / 2);
+            
+            Debug.Log($"Contact point: {contactPoint}, Platform top: {platformTop}, Player pos: {playerPosition}");
+            Debug.Log($"Player Y vs Platform Top Y: {playerPosition.y} vs {platformTop.y} (diff: {playerPosition.y - platformTop.y})");
+            
+            // Use player position instead of contact point for more reliable detection
+            if (playerPosition.y >= platformTop.y - 0.5f) // Increased tolerance
             {
                 hasPlayerOnTop = true;
+                Debug.Log("Player detected on top of falling platform - starting fall sequence");
                 StartCoroutine(StartFallingSequence());
+            }
+            else
+            {
+                Debug.Log($"Player not on top - contact too low. Required: {platformTop.y - 0.5f}, Got: {playerPosition.y}");
             }
         }
     }
@@ -840,6 +942,7 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
     {
         if (collision.gameObject.CompareTag("Player"))
         {
+            Debug.Log("OnCollisionExit2D: Player left platform - setting hasPlayerOnTop to false");
             hasPlayerOnTop = false;
         }
     }
@@ -849,45 +952,101 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
     {
         if (!isFalling && !hasPlayerOnTop)
         {
+            Debug.Log("TriggerFall called - starting fall sequence");
             hasPlayerOnTop = true;
             StartCoroutine(StartFallingSequence());
+        }
+        else
+        {
+            Debug.Log($"TriggerFall called but conditions not met: isFalling={isFalling}, hasPlayerOnTop={hasPlayerOnTop}");
         }
     }
     
     public void PlayerLeft()
     {
         hasPlayerOnTop = false;
+        Debug.Log("Player left falling platform trigger area");
     }
     
     private IEnumerator StartFallingSequence()
     {
+        Debug.Log($"StartFallingSequence: Beginning fall sequence with delay {fallDelay}s");
+        
         // Wait for the fall delay
         yield return new WaitForSeconds(fallDelay);
+        
+        Debug.Log($"StartFallingSequence: After delay - hasPlayerOnTop={hasPlayerOnTop}, isFalling={isFalling}");
         
         // Only proceed if player is still on the platform
         if (hasPlayerOnTop && !isFalling)
         {
+            Debug.Log("StartFallingSequence: Conditions met - proceeding with fall");
             isFalling = true;
+            Debug.Log("StartFallingSequence: Set isFalling = true");
             
-            // Create a copy of the platform that will fall
-            CreateFallingCopy();
-            
-            // Hide the original platform
-            SetPlatformVisibility(false);
-            
-            // Start the respawn timer
-            StartCoroutine(RespawnPlatform());
+            try
+            {
+                // Create a copy of the platform that will fall
+                Debug.Log("StartFallingSequence: About to call CreateFallingCopy()");
+                CreateFallingCopy();
+                Debug.Log("StartFallingSequence: CreateFallingCopy() completed");
+                
+                // Start the respawn timer BEFORE hiding the platform (so coroutine can start)
+                Debug.Log("StartFallingSequence: About to start RespawnPlatform coroutine");
+                StartCoroutine(RespawnPlatform());
+                Debug.Log("StartFallingSequence: RespawnPlatform coroutine started");
+                
+                // Hide the original platform
+                Debug.Log("StartFallingSequence: About to call SetPlatformVisibility(false)");
+                SetPlatformVisibility(false);
+                Debug.Log("StartFallingSequence: SetPlatformVisibility(false) completed");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"StartFallingSequence: Exception occurred: {e.Message}\n{e.StackTrace}");
+            }
+        }
+        else
+        {
+            Debug.Log($"StartFallingSequence: Conditions not met - hasPlayerOnTop={hasPlayerOnTop}, isFalling={isFalling}");
         }
     }
     
     private void CreateFallingCopy()
     {
-        // Create a copy of the platform with a slight offset to prevent immediate collision
-        Vector3 copyPosition = new Vector3(transform.position.x, transform.position.y - 0.1f, transform.position.z);
+        Debug.Log($"CreateFallingCopy: Creating falling copy at position {transform.position}");
+        
+        // For tilemap platforms, use the actual tilemap bounds instead of transform position
+        Vector3 copyPosition;
+        if (compositeCollider != null)
+        {
+            // Use the center of the tilemap bounds
+            Bounds tilemapBounds = compositeCollider.bounds;
+            copyPosition = new Vector3(tilemapBounds.center.x, tilemapBounds.center.y - 0.1f, transform.position.z);
+            Debug.Log($"CreateFallingCopy: Using tilemap bounds center {tilemapBounds.center} for copy position");
+        }
+        else
+        {
+            // Use transform position for sprite-based platforms
+            copyPosition = new Vector3(transform.position.x, transform.position.y - 0.1f, transform.position.z);
+        }
+        
+        Debug.Log($"CreateFallingCopy: Final copy position will be {copyPosition}");
         fallingCopy = Instantiate(gameObject, copyPosition, transform.rotation);
+        
+        Debug.Log($"CreateFallingCopy: Falling copy created at {copyPosition}, GameObject name: {fallingCopy.name}");
+        
+        // Check what components the copy has
+        Component[] components = fallingCopy.GetComponents<Component>();
+        Debug.Log($"CreateFallingCopy: Copy has {components.Length} components:");
+        foreach (Component comp in components)
+        {
+            Debug.Log($"  - {comp.GetType().Name}");
+        }
         
         // Put the copy on a different layer to avoid raycast issues
         fallingCopy.layer = 0; // Default layer
+        Debug.Log($"CreateFallingCopy: Set copy layer to {fallingCopy.layer}");
         
         // Remove the falling platform script from the copy to prevent recursion
         EnvironmentFallingPlatform copyScript = fallingCopy.GetComponent<EnvironmentFallingPlatform>();
@@ -903,25 +1062,55 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
             Destroy(triggerScript.gameObject);
         }
         
-        // Ensure the copy's collider is NOT a trigger for proper physics
+        // Ensure the copy's colliders are NOT triggers for proper physics
+        CompositeCollider2D copyCompositeCollider = fallingCopy.GetComponent<CompositeCollider2D>();
         BoxCollider2D copyCollider = fallingCopy.GetComponent<BoxCollider2D>();
+        
+        if (copyCompositeCollider != null)
+        {
+            copyCompositeCollider.isTrigger = false;
+        }
         if (copyCollider != null)
         {
             copyCollider.isTrigger = false;
         }
         
-        // Add Rigidbody2D to the copy for physics-based falling
+        // Configure the copy's Rigidbody2D for physics-based falling
         Rigidbody2D copyRigidbody = fallingCopy.GetComponent<Rigidbody2D>();
-        if (copyRigidbody == null)
+        if (copyRigidbody != null)
         {
+            Debug.Log($"CreateFallingCopy: Found Rigidbody2D on copy, changing to Dynamic");
+            // Change from Kinematic to Dynamic for physics
+            copyRigidbody.bodyType = RigidbodyType2D.Dynamic;
+            copyRigidbody.gravityScale = 3f; // Increased gravity for faster falling
+            copyRigidbody.freezeRotation = true;
+            copyRigidbody.linearDamping = 0f; // No air resistance
+            copyRigidbody.angularDamping = 0f;
+            Debug.Log($"CreateFallingCopy: Rigidbody2D configured - bodyType=Dynamic, gravityScale=3f");
+        }
+        else
+        {
+            // Add rigidbody if somehow missing
             copyRigidbody = fallingCopy.AddComponent<Rigidbody2D>();
+            copyRigidbody.bodyType = RigidbodyType2D.Dynamic;
+            copyRigidbody.gravityScale = 3f;
+            copyRigidbody.freezeRotation = true;
+            copyRigidbody.linearDamping = 0f;
+            copyRigidbody.angularDamping = 0f;
         }
         
-        // Configure the rigidbody for falling
-        copyRigidbody.gravityScale = 3f; // Increased gravity for faster falling
-        copyRigidbody.freezeRotation = true;
-        copyRigidbody.linearDamping = 0f; // No air resistance
-        copyRigidbody.angularDamping = 0f;
+        // Ensure the copy is active and visible
+        fallingCopy.SetActive(true);
+        
+        // For tilemap copies, ensure the TilemapRenderer is enabled
+        TilemapRenderer copyTilemapRenderer = fallingCopy.GetComponent<TilemapRenderer>();
+        if (copyTilemapRenderer != null)
+        {
+            copyTilemapRenderer.enabled = true;
+            Debug.Log("CreateFallingCopy: Enabled TilemapRenderer on copy");
+        }
+        
+        Debug.Log($"CreateFallingCopy: Final copy state - Active: {fallingCopy.activeInHierarchy}, Position: {fallingCopy.transform.position}");
         
         // Start the falling coroutine for the copy
         StartCoroutine(HandleFallingCopy(copyRigidbody));
@@ -992,15 +1181,39 @@ public class EnvironmentFallingPlatform : MonoBehaviour, IObjectBehavior
     
     private void SetPlatformVisibility(bool visible)
     {
+        Debug.Log($"SetPlatformVisibility: Setting visibility to {visible}");
+        
+        // Handle sprite-based platforms
         if (platformRenderer != null)
         {
             platformRenderer.enabled = visible;
+            Debug.Log($"SetPlatformVisibility: Set SpriteRenderer.enabled = {visible}");
         }
         
         if (platformCollider != null)
         {
             platformCollider.enabled = visible;
+            Debug.Log($"SetPlatformVisibility: Set BoxCollider2D.enabled = {visible}");
         }
+        
+        // Handle tilemap-based platforms
+        if (compositeCollider != null)
+        {
+            compositeCollider.enabled = visible;
+            Debug.Log($"SetPlatformVisibility: Set CompositeCollider2D.enabled = {visible}");
+        }
+        
+        // Disable the tilemap renderer for visual hiding
+        TilemapRenderer tilemapRenderer = GetComponent<TilemapRenderer>();
+        if (tilemapRenderer != null)
+        {
+            tilemapRenderer.enabled = visible;
+            Debug.Log($"SetPlatformVisibility: Set TilemapRenderer.enabled = {visible}");
+        }
+        
+        // Don't deactivate the GameObject completely as that kills coroutines
+        // Just disable the visual and collision components
+        Debug.Log($"SetPlatformVisibility: Completed visibility change to {visible} without deactivating GameObject");
     }
     
     private Sprite CreateSimpleSprite()

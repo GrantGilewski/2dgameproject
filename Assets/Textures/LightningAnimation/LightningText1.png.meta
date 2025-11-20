@@ -1,10 +1,19 @@
 fileFormatVersion: 2
-guid: 9a466b26d0895714ba8e0c59010f1303
+guid: faf9acaa55ef0483f819dd53e9fdd1d4
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4062896019262836102
-    second: Valor_Knight_walking-4-frames_east_0
+      213: -8572512253976862560
+    second: LightningText1_0
+  - first:
+      213: -4394679856249699048
+    second: LightningText1_1
+  - first:
+      213: 335970173652033394
+    second: LightningText1_2
+  - first:
+      213: -2691892908328020429
+    second: LightningText1_3
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -46,7 +55,7 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 2
+  spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
@@ -75,7 +84,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 1
+    textureCompression: 0
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -113,13 +122,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Valor_Knight_walking-4-frames_east_0
+      name: LightningText1_0
       rect:
         serializedVersion: 2
-        x: 27
-        y: 8
-        width: 15
-        height: 52
+        x: 24
+        y: 43
+        width: 213
+        height: 40
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +137,74 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 68d8283476e426830800000000000000
-      internalID: 4062896019262836102
+      spriteID: 0a0a60d2681580980800000000000000
+      internalID: -8572512253976862560
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LightningText1_1
+      rect:
+        serializedVersion: 2
+        x: 280
+        y: 43
+        width: 213
+        height: 40
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8150caa64f5f203c0800000000000000
+      internalID: -4394679856249699048
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LightningText1_2
+      rect:
+        serializedVersion: 2
+        x: 536
+        y: 40
+        width: 213
+        height: 43
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 27fd7a7c71b99a400800000000000000
+      internalID: 335970173652033394
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LightningText1_3
+      rect:
+        serializedVersion: 2
+        x: 794
+        y: 40
+        width: 207
+        height: 57
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 33617b189a974aad0800000000000000
+      internalID: -2691892908328020429
       vertices: []
       indices: 
       edges: []
@@ -138,7 +213,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -148,7 +223,10 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Valor_Knight_walking-4-frames_east_0: 4062896019262836102
+      LightningText1_0: -8572512253976862560
+      LightningText1_1: -4394679856249699048
+      LightningText1_2: 335970173652033394
+      LightningText1_3: -2691892908328020429
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

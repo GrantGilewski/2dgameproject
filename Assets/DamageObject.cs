@@ -22,6 +22,9 @@ public class DamageObject : MonoBehaviour
     [Tooltip("If true, this damage object can damage enemies")]
     public bool canDamageEnemies = true;
     
+    [Tooltip("LayerMask of objects that should NOT be damaged by this object")]
+    public LayerMask excludeLayers = 0;
+    
 
     
     private bool playerInside = false;
@@ -60,12 +63,27 @@ public class DamageObject : MonoBehaviour
         // Apply continuous damage while enemy is inside
         if (enemyInside && canDamageEnemies && Time.time - lastEnemyDamageTime >= damageRate)
         {
+            // Double-check that we should still be damaging enemies
+            if (currentEnemy != null && currentEnemy.CompareTag("Enemy") && !canDamageEnemies)
+            {
+                enemyInside = false;
+                currentEnemy = null;
+                return;
+            }
+            
+            // Apply damage to enemy
             DealDamageToEnemy();
         }
     }
     
     void OnTriggerEnter2D(Collider2D other)
     {
+        // Check if object is in excluded layers
+        if (excludeLayers != 0 && ((1 << other.gameObject.layer) & excludeLayers) != 0)
+        {
+            return; // Don't damage objects in excluded layers
+        }
+        
         if (damageOnTrigger && other.CompareTag("Player"))
         {
             // Check if we should exclude player layer
@@ -77,11 +95,20 @@ public class DamageObject : MonoBehaviour
             playerInside = true;
             DealDamageToPlayer();
         }
-        else if (damageOnTrigger && canDamageEnemies && other.GetComponent<EnemyBehavior>() != null)
+        else if (damageOnTrigger && other.GetComponent<EnemyBehavior>() != null)
         {
-            enemyInside = true;
-            currentEnemy = other.GetComponent<EnemyBehavior>();
-            DealDamageToEnemy();
+            // Additional safety check: don't damage objects tagged as "Enemy" unless specifically allowed
+            if (other.CompareTag("Enemy") && !canDamageEnemies)
+            {
+                return;
+            }
+            
+            if (canDamageEnemies)
+            {
+                enemyInside = true;
+                currentEnemy = other.GetComponent<EnemyBehavior>();
+                DealDamageToEnemy();
+            }
         }
     }
     
@@ -100,6 +127,12 @@ public class DamageObject : MonoBehaviour
     
     void OnCollisionEnter2D(Collision2D collision)
     {
+        // Check if object is in excluded layers
+        if (excludeLayers != 0 && ((1 << collision.gameObject.layer) & excludeLayers) != 0)
+        {
+            return; // Don't damage objects in excluded layers
+        }
+        
         if (damageOnCollision && collision.gameObject.CompareTag("Player"))
         {
             // Check if we should exclude player layer
@@ -113,6 +146,12 @@ public class DamageObject : MonoBehaviour
         }
         else if (damageOnCollision && canDamageEnemies && collision.gameObject.GetComponent<EnemyBehavior>() != null)
         {
+            // Additional safety check: don't damage objects tagged as "Enemy" unless specifically allowed
+            if (collision.gameObject.CompareTag("Enemy") && !canDamageEnemies)
+            {
+                return;
+            }
+            
             enemyInside = true;
             currentEnemy = collision.gameObject.GetComponent<EnemyBehavior>();
             DealDamageToEnemy();

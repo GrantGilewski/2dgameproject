@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 9a466b26d0895714ba8e0c59010f1303
+guid: 0fe6eea09fba2425fae98203c80b0991
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4062896019262836102
-    second: Valor_Knight_walking-4-frames_east_0
+      213: -6672077966168828358
+    second: SurfaceWaterText_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -48,10 +48,10 @@ TextureImporter:
   compressionQuality: 50
   spriteMode: 2
   spriteExtrude: 1
-  spriteMeshType: 1
+  spriteMeshType: 0
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 32
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -113,23 +113,23 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Valor_Knight_walking-4-frames_east_0
+      name: SurfaceWaterText_0
       rect:
         serializedVersion: 2
-        x: 27
-        y: 8
-        width: 15
-        height: 52
+        x: 0
+        y: 22
+        width: 32
+        height: 10
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 68d8283476e426830800000000000000
-      internalID: 4062896019262836102
+      spriteID: a36dbc0a0740863a0800000000000000
+      internalID: -6672077966168828358
       vertices: []
       indices: 
       edges: []
@@ -138,7 +138,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 62cf4f00c44024a39923887713661bfd
     internalID: 0
     vertices: []
     indices: 
@@ -146,9 +146,11 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      Valor_Knight_walking-4-frames_east_0: 4062896019262836102
+      SurfaceWaterText_0: -6672077966168828358
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -31,7 +31,6 @@ public class GameController : MonoBehaviour
     private void InitializeGame()
     {
         // TODO: Initialize game state, UI, score, etc.
-        Debug.Log("Game initialized!");
     }
     
     private void HandleGameInput()
@@ -47,7 +46,6 @@ public class GameController : MonoBehaviour
     {
         gameIsPaused = !gameIsPaused;
         Time.timeScale = gameIsPaused ? 0f : 1f;
-        Debug.Log($"Game {(gameIsPaused ? "Paused" : "Resumed")}");
     }
     
     // Public methods for other systems
@@ -56,12 +54,10 @@ public class GameController : MonoBehaviour
     public void RestartLevel()
     {
         // TODO: Implement level restart logic
-        Debug.Log("Level restarted!");
     }
     
     public void GameOver()
     {
         // TODO: Implement game over logic
-        Debug.Log("Game Over!");
     }
 }

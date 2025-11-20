@@ -8,11 +8,15 @@ TagManager:
   - Water
   - Door
   - FallingPlatform
-  - Damage
   - Switch
   - Trigger
   - Teleporter
   - Checkpoint
+  - WhisperShard
+  - StormShard
+  - ValorShard
+  - Enemy
+  - PlayerSummon
   layers:
   - Default
   - TransparentFX
@@ -20,9 +24,9 @@ TagManager:
   - Ground
   - Water
   - UI
-  - 
-  - 
-  - 
+  - Player
+  - Entities
+  - NPC
   - 
   - 
   - 

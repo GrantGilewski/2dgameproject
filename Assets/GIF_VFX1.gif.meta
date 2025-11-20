@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 9a466b26d0895714ba8e0c59010f1303
+guid: cb1a8c87bb9a047319be9c15a0d8cb17
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4062896019262836102
-    second: Valor_Knight_walking-4-frames_east_0
+      213: -6465680886703797877
+    second: GIF_VFX1_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 0
+    filterMode: 1
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Valor_Knight_walking-4-frames_east_0
+      name: GIF_VFX1_0
       rect:
         serializedVersion: 2
-        x: 27
-        y: 8
-        width: 15
-        height: 52
+        x: 24
+        y: 43
+        width: 213
+        height: 40
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 68d8283476e426830800000000000000
-      internalID: 4062896019262836102
+      spriteID: b89ccfc7d794546a0800000000000000
+      internalID: -6465680886703797877
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Valor_Knight_walking-4-frames_east_0: 4062896019262836102
+      GIF_VFX1_0: -6465680886703797877
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -36,7 +36,6 @@ public class FixedBackground : MonoBehaviour
             if (backgroundSpriteRenderer != null)
             {
                 backgroundSprite = backgroundSpriteRenderer.transform;
-                Debug.Log("FixedBackground: Found background sprite: " + backgroundSprite.name);
             }
         }
         else
@@ -96,8 +95,6 @@ public class FixedBackground : MonoBehaviour
         float scale = Mathf.Max(scaleX, scaleY);
         
         backgroundSprite.localScale = Vector3.one * scale;
-        
-        Debug.Log("Background scaled to " + scale + " to cover camera view");
     }
     
     private void UpdateBackgroundPosition()
