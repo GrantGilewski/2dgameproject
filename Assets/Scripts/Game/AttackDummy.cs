@@ -16,11 +16,26 @@ public class AttackDummy : MonoBehaviour
     [SerializeField] private Vector2 healthBarSize = new Vector2(1.5f, 0.2f); // Match enemy health bar size
     [SerializeField] private Vector3 healthBarOffset = new Vector3(0f, 1.5f, 0f); // Match enemy health bar offset
     
+    [Header("Animation Settings")]
+    [SerializeField] private bool alternateAttacks = true; // Whether to alternate between attack animations
+    
+    [Header("Jump Settings")]
+    [SerializeField] private float jumpForce = 8f; // Force applied when dummy jumps
+    [SerializeField] private float jumpCooldown = 1f; // Time between jumps
+    [SerializeField] private float minHeightDifferenceToJump = 1.5f; // Minimum height difference to trigger jump
+    [SerializeField] private float jumpDetectionDistance = 2f; // How far ahead to check for surfaces
+    [SerializeField] private LayerMask groundLayerMask = 1; // What layers count as ground for jump detection
+    
+    [Header("Death Settings")]
+    [SerializeField] private Color deathColor = new Color(0.5f, 0.5f, 0.5f, 0.7f); // Gray and semi-transparent
+    [SerializeField] private float deathAnimationDuration = 2f; // How long death animation plays before destruction
+    
     // Components and references
     private float currentHealth;
     private GameObject player;
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
+    private Animator animator;
     
     // Combat system
     private float lastAttackTime = 0f;
@@ -34,6 +49,17 @@ public class AttackDummy : MonoBehaviour
     // State machine
     private enum DummyState { Following, Attacking, Returning }
     private DummyState currentState = DummyState.Following;
+    
+    // Animation System
+    private bool useNextAttackAnimation = false; // For alternating attacks
+    private bool isAttacking = false; // To prevent animation conflicts during attacks
+    private bool isDead = false; // Death state for animations
+    
+    // Jump System
+    private float lastJumpTime = 0f;
+    
+    // Death System
+    private Color originalColor;
     
     // Track active attacks for cleanup
     private System.Collections.Generic.List<GameObject> activeAttackObjects = new System.Collections.Generic.List<GameObject>();
@@ -59,6 +85,17 @@ public class AttackDummy : MonoBehaviour
         // Get components
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+        
+        // Store original color for death animation
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
+        
+        // Get animator component
+        animator = GetComponent<Animator>();
+        if (animator == null)
+            animator = GetComponentInChildren<Animator>();
         
         // Ensure proper setup - will be configured as dynamic in SetupColliders
         if (rb == null)
@@ -150,6 +187,9 @@ public class AttackDummy : MonoBehaviour
         // Update state machine
         UpdateStateMachine();
         
+        // Update animations based on current state
+        UpdateAnimations();
+        
         // Update health bar
         UpdateHealthBar();
     }
@@ -163,6 +203,66 @@ public class AttackDummy : MonoBehaviour
             {
                 activeAttackCoroutines.RemoveAt(i);
             }
+        }
+    }
+    
+    private void UpdateAnimations()
+    {
+        if (animator == null) return;
+        
+        // Update animator parameters based on current state
+        animator.SetBool("isDead", isDead);
+        animator.SetBool("isAttacking", isAttacking);
+        
+        if (!isDead && !isAttacking)
+        {
+            // Check if moving (has horizontal velocity)
+            bool isMoving = rb != null && Mathf.Abs(rb.linearVelocity.x) > 0.1f;
+            animator.SetBool("isWalking", isMoving);
+        }
+        else
+        {
+            animator.SetBool("isWalking", false);
+        }
+    }
+    
+    private void PlayAttackAnimation()
+    {
+        if (animator == null) return;
+        
+        // Set attacking flag to prevent animation interruption
+        isAttacking = true;
+        
+        if (alternateAttacks)
+        {
+            // Set attack type parameter for alternating attacks
+            int attackType = useNextAttackAnimation ? 1 : 0;
+            animator.SetInteger("attackType", attackType);
+            useNextAttackAnimation = !useNextAttackAnimation;
+        }
+        else
+        {
+            // Always use attack type 0 (Attack1)
+            animator.SetInteger("attackType", 0);
+        }
+        
+        // The isAttacking parameter will trigger the appropriate attack transition
+        animator.SetBool("isAttacking", true);
+        
+        // Clear attacking flag after attack duration
+        StartCoroutine(ClearAttackingFlag());
+    }
+    
+    private System.Collections.IEnumerator ClearAttackingFlag()
+    {
+        // Wait for attack duration plus a small buffer
+        yield return new WaitForSeconds(0.3f + 0.1f); // attackDuration + buffer
+        isAttacking = false;
+        
+        // Clear the attacking parameter in the animator
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
         }
     }
     
@@ -188,9 +288,12 @@ public class AttackDummy : MonoBehaviour
                 break;
                 
             case DummyState.Attacking:
-                if (currentTarget == null || Vector3.Distance(transform.position, currentTarget.transform.position) > attackRange * 2f)
+                // Check if target is null, too far, or dead
+                EnemyBehavior targetEnemy = currentTarget?.GetComponent<EnemyBehavior>();
+                if (currentTarget == null || Vector3.Distance(transform.position, currentTarget.transform.position) > attackRange * 2f || 
+                    (targetEnemy != null && targetEnemy.IsDead))
                 {
-                    // Target lost or too far, return to following
+                    // Target lost, too far, or dead - return to following
                     currentTarget = null;
                     currentState = DummyState.Following;
                 }
@@ -201,6 +304,13 @@ public class AttackDummy : MonoBehaviour
                     
                     if (distanceToTarget <= attackRange)
                     {
+                        // Face the target while in combat range
+                        if (spriteRenderer != null && currentTarget != null)
+                        {
+                            bool shouldFaceRight = currentTarget.transform.position.x > transform.position.x;
+                            spriteRenderer.flipX = !shouldFaceRight;
+                        }
+                        
                         // In attack range - attack if cooldown is ready
                         if (Time.time - lastAttackTime >= attackCooldown)
                         {
@@ -247,6 +357,12 @@ public class AttackDummy : MonoBehaviour
             currentSpeed *= 1.5f; // 1.5x speed when moderately far
         }
         
+        // Check for higher surfaces and jump if needed
+        if (ShouldJumpToReachTarget(direction))
+        {
+            PerformJump();
+        }
+        
         // Apply horizontal force for dynamic rigidbody movement
         if (rb != null && rb.bodyType == RigidbodyType2D.Dynamic)
         {
@@ -272,6 +388,77 @@ public class AttackDummy : MonoBehaviour
         {
             spriteRenderer.flipX = direction.x < 0;
         }
+    }
+    
+    private bool ShouldJumpToReachTarget(Vector3 direction)
+    {
+        // Don't jump if on cooldown or not grounded
+        if (Time.time - lastJumpTime < jumpCooldown || !IsGrounded())
+        {
+            return false;
+        }
+        
+        // Only check for jumps when moving horizontally
+        if (Mathf.Abs(direction.x) < 0.1f)
+        {
+            return false;
+        }
+        
+        // Cast a ray forward to detect surfaces
+        Vector3 rayStart = transform.position + Vector3.up * 0.5f; // Start slightly above ground
+        Vector3 rayDirection = new Vector3(Mathf.Sign(direction.x), 0f, 0f);
+        
+        RaycastHit2D hit = Physics2D.Raycast(rayStart, rayDirection, jumpDetectionDistance, groundLayerMask);
+        
+        if (hit.collider != null)
+        {
+            // Check if the surface is significantly higher than current position
+            float heightDifference = hit.point.y - transform.position.y;
+            
+            // If there's a wall or surface that's higher than our jump threshold, we should jump
+            if (heightDifference > minHeightDifferenceToJump)
+            {
+                Debug.Log($"AttackDummy: Detected surface {heightDifference:F2} units above, preparing to jump");
+                return true;
+            }
+        }
+        
+        // Also check if there's a gap ahead that requires jumping over
+        Vector3 groundCheckStart = transform.position + new Vector3(Mathf.Sign(direction.x) * 1f, -0.5f, 0f);
+        RaycastHit2D groundHit = Physics2D.Raycast(groundCheckStart, Vector2.down, 2f, groundLayerMask);
+        
+        if (groundHit.collider == null)
+        {
+            // There's a gap ahead - we might need to jump over it
+            Debug.Log("AttackDummy: Detected gap ahead, preparing to jump");
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private bool IsGrounded()
+    {
+        // Check if dummy is on the ground by casting a short ray downward
+        Vector3 rayStart = transform.position;
+        RaycastHit2D hit = Physics2D.Raycast(rayStart, Vector2.down, 1.1f, groundLayerMask);
+        
+        // Also check if vertical velocity is near zero (not already jumping/falling fast)
+        bool velocityGrounded = rb == null || Mathf.Abs(rb.linearVelocity.y) < 0.1f;
+        
+        return hit.collider != null && velocityGrounded;
+    }
+    
+    private void PerformJump()
+    {
+        if (rb == null) return;
+        
+        lastJumpTime = Time.time;
+        
+        // Apply upward force for jump
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        
+        Debug.Log($"AttackDummy: Performed jump with force {jumpForce}");
     }
     
     private GameObject FindNearestEnemy()
@@ -305,7 +492,27 @@ public class AttackDummy : MonoBehaviour
     
     private void AttackTarget(GameObject target)
     {
+        if (target == null) return;
+        
+        // Don't attack dead enemies
+        EnemyBehavior enemyBehavior = target.GetComponent<EnemyBehavior>();
+        if (enemyBehavior != null && enemyBehavior.IsDead)
+        {
+            Debug.Log($"AttackDummy: Skipping attack on dead enemy {target.name}");
+            return;
+        }
+        
         lastAttackTime = Time.time;
+        
+        // Face the target before attacking
+        if (spriteRenderer != null)
+        {
+            bool shouldFaceRight = target.transform.position.x > transform.position.x;
+            spriteRenderer.flipX = !shouldFaceRight; // Flip sprite to face target
+        }
+        
+        // Play attack animation
+        PlayAttackAnimation();
         
         // Create attack damage object in direction of target (similar to enemy behavior)
         Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
@@ -382,6 +589,8 @@ public class AttackDummy : MonoBehaviour
     
     public void TakeDamage(float damage)
     {
+        if (isDead) return; // Prevent damage after death
+        
         currentHealth -= damage;
         currentHealth = Mathf.Max(0f, currentHealth);
         
@@ -420,12 +629,75 @@ public class AttackDummy : MonoBehaviour
     
     private void Die()
     {
-        Debug.Log("Attack Dummy destroyed!");
+        if (isDead) return; // Prevent multiple death calls
         
-        // Clean up all active attacks and health bar
+        isDead = true;
+        Debug.Log("Attack Dummy dying - playing death animation");
+        
+        // Stop all movement when dead
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+        
+        // Clear any attack state and set death parameter
+        isAttacking = false;
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
+            animator.SetBool("isDead", true);
+        }
+        
+        // Change sprite color to death color
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = deathColor;
+        }
+        
+        // Keep collider enabled for ground collision (like enemies)
+        // No need to disable collider as all damage methods check isDead status
+        
+        // Clean up active attacks but keep health bar visible during death animation
+        CleanupActiveAttacks();
+        
+        // Start death animation countdown
+        StartCoroutine(DeathAnimationCountdown());
+    }
+    
+    private System.Collections.IEnumerator DeathAnimationCountdown()
+    {
+        // Wait for death animation to complete
+        yield return new WaitForSeconds(deathAnimationDuration);
+        
+        Debug.Log("Attack Dummy death animation complete - destroying");
+        
+        // Clean up health bar and destroy
         CleanupAttacks();
-        
         Destroy(gameObject);
+    }
+    
+    private void CleanupActiveAttacks()
+    {
+        // Stop all active attack coroutines
+        foreach (Coroutine coroutine in activeAttackCoroutines)
+        {
+            if (coroutine != null)
+            {
+                StopCoroutine(coroutine);
+            }
+        }
+        activeAttackCoroutines.Clear();
+        
+        // Destroy all active attack objects
+        foreach (GameObject attackObj in activeAttackObjects)
+        {
+            if (attackObj != null)
+            {
+                Destroy(attackObj);
+            }
+        }
+        activeAttackObjects.Clear();
     }
     
     void OnDestroy()
@@ -570,6 +842,25 @@ public class AttackDummy : MonoBehaviour
             Gizmos.color = Color.blue;
             Gizmos.DrawWireSphere(player.transform.position, followDistance);
         }
+        
+        // Draw jump detection rays
+        Gizmos.color = Color.yellow;
+        Vector3 rayStart = transform.position + Vector3.up * 0.5f;
+        
+        // Forward jump detection ray (both directions)
+        Gizmos.DrawRay(rayStart, Vector3.right * jumpDetectionDistance);
+        Gizmos.DrawRay(rayStart, Vector3.left * jumpDetectionDistance);
+        
+        // Ground detection ray
+        Gizmos.color = Color.green;
+        Gizmos.DrawRay(transform.position, Vector2.down * 1.1f);
+        
+        // Gap detection rays
+        Gizmos.color = Color.cyan;
+        Vector3 gapCheckRight = transform.position + new Vector3(1f, -0.5f, 0f);
+        Vector3 gapCheckLeft = transform.position + new Vector3(-1f, -0.5f, 0f);
+        Gizmos.DrawRay(gapCheckRight, Vector2.down * 2f);
+        Gizmos.DrawRay(gapCheckLeft, Vector2.down * 2f);
     }
 }
 

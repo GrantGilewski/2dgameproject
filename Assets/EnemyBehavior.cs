@@ -23,17 +23,21 @@ public class EnemyBehavior : MonoBehaviour
     [SerializeField] private float attackRange = 2f; // Range to attack player
     [SerializeField] private float attackCooldown = 2f; // Time between attacks
     [SerializeField] private float attackDamage = 15f; // Damage dealt by enemy attacks
-    [SerializeField] private float attackDuration = 0.3f; // How long attack damage object lasts
+    [SerializeField] private float attackDuration = 0.8f; // How long attack damage object lasts (increased for longer animations)
     [SerializeField] private Vector2 attackSize = new Vector2(1f, 1f); // Size of attack damage object
     [SerializeField] private float jumpForce = 8f; // Force applied when enemy jumps
     [SerializeField] private float jumpCooldown = 1f; // Time between jumps
     [SerializeField] private float minHeightDifferenceToJump = 1.5f; // Minimum height difference to trigger jump
+    
+    [Header("Animation Settings")]
+    [SerializeField] private bool alternateAttacks = true; // Whether to alternate between attack animations
     
     [Header("Collision")]
     [SerializeField] private LayerMask playerLayerMask = 1; // What layers count as player
     
     // Private variables
     private SpriteRenderer spriteRenderer;
+    private Animator animator;
     private Collider2D enemyCollider;
     private Rigidbody2D rb;
     private int currentHealth;
@@ -46,6 +50,10 @@ public class EnemyBehavior : MonoBehaviour
     private float lastAttackTime = 0f;
     private bool isFacingRight = true;
     private float lastJumpTime = 0f;
+    
+    // Animation System
+    private bool useNextAttackAnimation = false; // For alternating attacks
+    private bool isAttacking = false; // To prevent animation conflicts during attacks
     
     // Damage Object Integration
     private bool inDamageZone = false;
@@ -71,6 +79,10 @@ public class EnemyBehavior : MonoBehaviour
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            
+        animator = GetComponent<Animator>();
+        if (animator == null)
+            animator = GetComponentInChildren<Animator>();
             
         enemyCollider = GetComponent<Collider2D>();
         rb = GetComponent<Rigidbody2D>();
@@ -208,6 +220,9 @@ public class EnemyBehavior : MonoBehaviour
                 Debug.LogError($"Error in HandleAggression for {gameObject.name}: {e.Message}");
             }
         }
+        
+        // Update animations based on current state
+        UpdateAnimations();
     }
     
     private bool ValidateComponents()
@@ -240,6 +255,66 @@ public class EnemyBehavior : MonoBehaviour
         }
         
         return true; // Continue processing even if some components are missing
+    }
+    
+    private void UpdateAnimations()
+    {
+        if (animator == null) return;
+        
+        // Update animator parameters based on current state
+        animator.SetBool("isDead", isDead);
+        animator.SetBool("isAttacking", isAttacking);
+        
+        if (!isDead && !isAttacking)
+        {
+            // Check if moving (has horizontal velocity)
+            bool isMoving = rb != null && Mathf.Abs(rb.linearVelocity.x) > 0.1f;
+            animator.SetBool("isWalking", isMoving);
+        }
+        else
+        {
+            animator.SetBool("isWalking", false);
+        }
+    }
+    
+    private void PlayAttackAnimation()
+    {
+        if (animator == null) return;
+        
+        // Set attacking flag to prevent animation interruption
+        isAttacking = true;
+        
+        if (alternateAttacks)
+        {
+            // Set attack type parameter for alternating attacks
+            int attackType = useNextAttackAnimation ? 1 : 0;
+            animator.SetInteger("attackType", attackType);
+            useNextAttackAnimation = !useNextAttackAnimation;
+        }
+        else
+        {
+            // Always use attack type 0 (Attack1)
+            animator.SetInteger("attackType", 0);
+        }
+        
+        // The isAttacking parameter will trigger the appropriate attack transition
+        animator.SetBool("isAttacking", true);
+        
+        // Clear attacking flag after attack duration
+        StartCoroutine(ClearAttackingFlag());
+    }
+    
+    private IEnumerator ClearAttackingFlag()
+    {
+        // Wait for attack duration plus a small buffer
+        yield return new WaitForSeconds(attackDuration + 0.1f);
+        isAttacking = false;
+        
+        // Clear the attacking parameter in the animator
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
+        }
     }
     
     // Damage Object Integration - Trigger Events
@@ -355,8 +430,8 @@ public class EnemyBehavior : MonoBehaviour
                 }
             }
             
-            // Face the player
-            FacePlayer();
+            // Face the target
+            FaceTarget(nearestTarget);
         }
         else
         {
@@ -429,6 +504,12 @@ public class EnemyBehavior : MonoBehaviour
     {
         if (target == null) return;
         
+        // Face the target before attacking
+        FaceTarget(target);
+        
+        // Play attack animation
+        PlayAttackAnimation();
+        
         // Check if target is a dummy
         AttackDummy dummy = target.GetComponent<AttackDummy>();
         if (dummy != null)
@@ -476,11 +557,11 @@ public class EnemyBehavior : MonoBehaviour
         rb.linearVelocity = new Vector2(horizontalMovement, rb.linearVelocity.y);
     }
     
-    private void FacePlayer()
+    private void FaceTarget(Transform target)
     {
-        if (spriteRenderer == null || playerTransform == null) return;
+        if (spriteRenderer == null || target == null) return;
         
-        bool shouldFaceRight = playerTransform.position.x > transform.position.x;
+        bool shouldFaceRight = target.position.x > transform.position.x;
         
         if (shouldFaceRight != isFacingRight)
         {
@@ -621,17 +702,22 @@ public class EnemyBehavior : MonoBehaviour
             rb.angularVelocity = 0f;
         }
         
+        // Clear any attack state and set death parameter
+        isAttacking = false;
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
+            animator.SetBool("isDead", true);
+        }
+        
         // Change sprite color to death color and keep it visible
         if (spriteRenderer != null)
         {
             spriteRenderer.color = deathColor;
         }
         
-        // Disable collider so it can't take more damage or be interacted with
-        if (enemyCollider != null)
-        {
-            enemyCollider.enabled = false;
-        }
+        // Keep collider enabled for ground collision - damage is prevented by isDead checks
+        // No need to disable collider as all damage methods check isDead status
         
         // Clean up all damage-related state
         inDamageZone = false;
@@ -678,6 +764,17 @@ public class EnemyBehavior : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
         
+        // Reset animation state
+        isAttacking = false;
+        useNextAttackAnimation = false;
+        if (animator != null)
+        {
+            animator.SetBool("isDead", false);
+            animator.SetBool("isAttacking", false);
+            animator.SetBool("isWalking", false);
+            animator.SetInteger("attackType", 0);
+        }
+        
         // Reset health bar animation values
         targetFillAmount = 1f;
         currentFillAmount = 1f;
@@ -699,11 +796,7 @@ public class EnemyBehavior : MonoBehaviour
             spriteRenderer.color = originalColor;
         }
         
-        // Re-enable collider
-        if (enemyCollider != null)
-        {
-            enemyCollider.enabled = true;
-        }
+        // Collider stays enabled throughout, no need to re-enable
         
         // Hide respawn timer
         if (respawnTimerText != null)

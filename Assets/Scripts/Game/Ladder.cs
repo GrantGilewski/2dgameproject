@@ -60,7 +60,7 @@ public class Ladder : MonoBehaviour
     {
         if (other.CompareTag("Player") && playerMovement != null)
         {
-            playerMovement.SetNearbyLadder(this);
+            playerMovement.SetNearbyLadder(this.gameObject);
         }
     }
     

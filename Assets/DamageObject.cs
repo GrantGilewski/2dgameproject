@@ -25,6 +25,9 @@ public class DamageObject : MonoBehaviour
     [Tooltip("LayerMask of objects that should NOT be damaged by this object")]
     public LayerMask excludeLayers = 0;
     
+    // Callback system for weapon passives
+    public System.Action onEnemyHit;
+    
 
     
     private bool playerInside = false;
@@ -186,6 +189,9 @@ public class DamageObject : MonoBehaviour
         {
             currentEnemy.TakeDamage(damageAmount);
             lastEnemyDamageTime = Time.time;
+            
+            // Trigger callback for weapon passives
+            onEnemyHit?.Invoke();
         }
     }
     

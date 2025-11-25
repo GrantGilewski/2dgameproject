@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -73,7 +74,8 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private float boltCooldown = 1.2f; // Cooldown between lightning bolts
     [SerializeField] private float boltHeight = 100f; // Height above player for sky bolt
     [SerializeField] private float boltRange = 15f; // Range to find nearest enemy for sky bolt
-    [SerializeField] private Sprite lightningBoltSprite = null; // Sprite for lightning bolt blast damage boxes
+    [SerializeField] private GameObject lightningBlastPrefab = null; // Prefab with animation controller for lightning blast
+    [SerializeField] private Sprite lightningBoltSprite = null; // Fallback sprite if no prefab assigned
     [SerializeField] private Material lightningArcMaterial = null; // Custom glowing material for lightning arcs and bolt strikes
     
     [Header("Chain Lightning Settings")]
@@ -113,7 +115,11 @@ public class WeaponClassController : MonoBehaviour
     private bool isPerformingSpecialAttack = false;
     
     // ValorShard Special Attack Settings
-    [SerializeField] private float dashForce = 8f; // Forward propulsion force
+    [SerializeField] private float dashForce = 6f; // Forward propulsion force (reduced)
+    [SerializeField] private float flipUpwardForce = 8f; // Upward force for flip
+    [SerializeField] private int flipDamage = 40; // Damage dealt during flip
+    [SerializeField] private float flipDamageWidth = 2f; // Width of flip damage zone
+    [SerializeField] private float flipDamageHeight = 2f; // Height of flip damage zone
     private bool isPerformingFlip = false;
     private float flipStartTime = 0f;
     private float flipDuration = 1f; // Duration of flip animation
@@ -146,8 +152,27 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private float dummyLifespan = 120f; // 2 minutes in seconds
     [SerializeField] private float summonRadius = 3f; // Radius around player to summon dummies
     
+    [Header("Storm Shard - Movement Passive")]
+    [SerializeField] private float stormMovementSwiftnessPercent = 5f; // 5% swiftness per stack
+    [SerializeField] private float stormMovementBuffDuration = 2f; // Duration per stack when moving
+    [SerializeField] private int maxStormMovementStacks = 10; // Maximum swiftness stacks
+    [SerializeField] private float stormMovementCheckInterval = 0.1f; // How often to check movement (10 times per second)
+    
+    [Header("Whisper Shard - Attack Passive")]
+    [SerializeField] private float whisperAttackBuffPercent = 3f; // 3% attack buff per enemy hit
+    [SerializeField] private float whisperAttackBuffDuration = 8f; // 8 seconds per buff
+    [SerializeField] private int maxWhisperAttackStacks = 15; // Maximum attack buff stacks
+    
+    [Header("Valor Shard - Aegis Cap Passive")]
+    [SerializeField] private float valorAegisCapPercent = 33f; // 33% of max health cap for attack-generated aegis
+    
     // Ultimate System Tracking
     private List<GameObject> activeDummies = new List<GameObject>(); // Track active summoned dummies
+    
+    // Passive System Tracking
+    private float lastMovementCheckTime = 0f; // Track movement check timing
+    private bool wasMovingLastCheck = false; // Track previous movement state
+    private Dictionary<string, int> passiveBuffStacks = new Dictionary<string, int>(); // Track passive buff stacks
     
     // Cooldown System
     private float lastSwordAttackTime = 0f;
@@ -224,6 +249,9 @@ public class WeaponClassController : MonoBehaviour
         {
             UpdatePlayerFacingForMouse();
         }
+        
+        // Handle passive abilities
+        UpdatePassiveAbilities();
     }
     
     private void InitializeGUI()
@@ -971,8 +999,9 @@ public class WeaponClassController : MonoBehaviour
             yield break;
         }
         
-        // Get mouse position for targeting
-        Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        // Get mouse position for targeting using Input System
+        Vector2 mouseScreenPos = Mouse.current.position.ReadValue();
+        Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, Camera.main.nearClipPlane));
         mouseWorldPos.z = 0f; // Ensure Z is 0 for 2D
         
         Debug.Log($"WhisperShard: Mouse position: {mouseWorldPos}, Player position: {playerTransform.position}");
@@ -1027,6 +1056,9 @@ public class WeaponClassController : MonoBehaviour
         DamageObject damageComponent = projectile.AddComponent<DamageObject>();
         damageComponent.damageAmount = playerMovement.GetModifiedMeleeDamage(projectileDamage);
         damageComponent.damageRate = 0.1f;
+        
+        // Add Whisper Shard passive callback
+        damageComponent.onEnemyHit = () => ApplyWhisperAttackPassive();
         
         // Configure damage object
         var excludeField = typeof(DamageObject).GetField("excludePlayerLayer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -1173,7 +1205,8 @@ public class WeaponClassController : MonoBehaviour
         swordTexture.Apply();
         
         swordRenderer.sprite = Sprite.Create(swordTexture, new Rect(0, 0, textureWidth, textureHeight), Vector2.one * 0.5f);
-        swordRenderer.sortingOrder = 10;
+        swordRenderer.sortingLayerName = "Player";
+        swordRenderer.sortingOrder = 0;
         
         // Store initial player position and facing direction
         bool facingLeft = false;
@@ -1317,7 +1350,8 @@ public class WeaponClassController : MonoBehaviour
             blockRenderer.sprite = Sprite.Create(blockTexture, new Rect(0, 0, textureSize, textureSize), Vector2.one * 0.5f);
         }
         
-        blockRenderer.sortingOrder = 10;
+        blockRenderer.sortingLayerName = "Player";
+        blockRenderer.sortingOrder = 0;
         
         return waveBlock;
     }
@@ -1480,6 +1514,9 @@ public class WeaponClassController : MonoBehaviour
         damageComponent.damageAmount = playerMovement.GetModifiedMeleeDamage(daggerDamage);
         damageComponent.damageRate = 0.1f;
         
+        // Add Whisper Shard passive callback
+        damageComponent.onEnemyHit = () => ApplyWhisperAttackPassive();
+        
         // Configure damage object
         var excludeField = typeof(DamageObject).GetField("excludePlayerLayer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         if (excludeField != null)
@@ -1512,7 +1549,8 @@ public class WeaponClassController : MonoBehaviour
         daggerTexture.Apply();
         
         daggerRenderer.sprite = Sprite.Create(daggerTexture, new Rect(0, 0, textureWidth, textureHeight), Vector2.one * 0.5f);
-        daggerRenderer.sortingOrder = 10;
+        daggerRenderer.sortingLayerName = "Player";
+        daggerRenderer.sortingOrder = 0;
         
         // Store facing direction
         SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
@@ -1925,6 +1963,9 @@ public class WeaponClassController : MonoBehaviour
         damageComponent.damageAmount = playerMovement.GetModifiedMeleeDamage(projectileDamage);
         damageComponent.damageRate = 0.1f;
         
+        // Add Whisper Shard passive callback
+        damageComponent.onEnemyHit = () => ApplyWhisperAttackPassive();
+        
         // Configure damage object
         var excludeField = typeof(DamageObject).GetField("excludePlayerLayer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         if (excludeField != null)
@@ -1965,7 +2006,8 @@ public class WeaponClassController : MonoBehaviour
             projectileRenderer.sprite = Sprite.Create(projectileTexture, new Rect(0, 0, textureWidth, textureHeight), Vector2.one * 0.5f);
         }
         
-        projectileRenderer.sortingOrder = 10;
+        projectileRenderer.sortingLayerName = "Player";
+        projectileRenderer.sortingOrder = 0;
         
         // Add rotation component to make dagger face travel direction
         projectile.AddComponent<DaggerRotationController>();
@@ -2130,7 +2172,8 @@ public class WeaponClassController : MonoBehaviour
         glowRenderer.startWidth = 0.3f; // Much wider for glow effect
         glowRenderer.endWidth = 0.2f;
         glowRenderer.positionCount = 10;
-        glowRenderer.sortingOrder = 13; // Behind main lightning
+        glowRenderer.sortingLayerName = "Player";
+        glowRenderer.sortingOrder = 0;
         
         // Create main (foreground) LineRenderer
         GameObject mainLightning = new GameObject("MainElectricArc");
@@ -2142,7 +2185,8 @@ public class WeaponClassController : MonoBehaviour
         lineRenderer.startWidth = 0.1f;
         lineRenderer.endWidth = 0.05f;
         lineRenderer.positionCount = 10; // More points for bending effect
-        lineRenderer.sortingOrder = 15; // In front of glow
+        lineRenderer.sortingLayerName = "Player";
+        lineRenderer.sortingOrder = 0;
         
         // Create bending arc points
         Vector3[] arcPoints = CreateBendingArc(startPos, endPos, 10);
@@ -2190,7 +2234,8 @@ public class WeaponClassController : MonoBehaviour
         chainGlowRenderer.startWidth = 0.24f; // Wider glow for chain
         chainGlowRenderer.endWidth = 0.16f;
         chainGlowRenderer.positionCount = 8;
-        chainGlowRenderer.sortingOrder = 12; // Behind main chain lightning
+        chainGlowRenderer.sortingLayerName = "Player";
+        chainGlowRenderer.sortingOrder = 0;
         
         // Create main chain LineRenderer
         GameObject mainChain = new GameObject("MainChainArc");
@@ -2214,7 +2259,8 @@ public class WeaponClassController : MonoBehaviour
         lineRenderer.startWidth = 0.08f; // Slightly thinner than main lightning
         lineRenderer.endWidth = 0.04f;
         lineRenderer.positionCount = 8; // Fewer points for quicker creation
-        lineRenderer.sortingOrder = 14; // Slightly behind main lightning
+        lineRenderer.sortingLayerName = "Player";
+        lineRenderer.sortingOrder = 0;
         
         // Create bending arc points for chain lightning
         Vector3[] arcPoints = CreateBendingArc(startPos, endPos, 8);
@@ -2290,7 +2336,8 @@ public class WeaponClassController : MonoBehaviour
         boltGlowRenderer.startWidth = 0.5f; // Much wider glow for dramatic effect
         boltGlowRenderer.endWidth = 0.3f;
         boltGlowRenderer.positionCount = 6;
-        boltGlowRenderer.sortingOrder = 13; // Behind main bolt
+        boltGlowRenderer.sortingLayerName = "Player";
+        boltGlowRenderer.sortingOrder = 0;
         
         // Create main lightning bolt LineRenderer
         GameObject mainBolt = new GameObject("MainLightningBolt");
@@ -2302,7 +2349,8 @@ public class WeaponClassController : MonoBehaviour
         lineRenderer.startWidth = 0.2f;
         lineRenderer.endWidth = 0.1f;
         lineRenderer.positionCount = 6; // More points for subtle bending
-        lineRenderer.sortingOrder = 15;
+        lineRenderer.sortingLayerName = "Player";
+        lineRenderer.sortingOrder = 0;
         
         // Create slightly squiggly lightning bolt path
         Vector3[] boltPoints = CreateBendingBolt(startPos, endPos, 6);
@@ -2345,15 +2393,24 @@ public class WeaponClassController : MonoBehaviour
             enemyDamageField.SetValue(impactDamage, true);
         }
         
-        // Visual impact effect (lightning bolt sprite)
-        SpriteRenderer impactRenderer = impact.AddComponent<SpriteRenderer>();
-        
-        // Use custom lightning bolt sprite if assigned, otherwise create fallback yellow texture
-        if (lightningBoltSprite != null)
+        // Visual impact effect (animated lightning blast or sprite)
+        if (lightningBlastPrefab != null)
         {
-            impactRenderer.sprite = lightningBoltSprite;
+            // Use animated prefab - instantiate it as child of the impact object
+            GameObject animatedBlast = Instantiate(lightningBlastPrefab, impact.transform);
+            animatedBlast.transform.localPosition = Vector3.zero;
+            animatedBlast.transform.localScale = Vector3.one;
         }
         else
+        {
+            // Fallback: Use sprite renderer for static sprite
+            SpriteRenderer impactRenderer = impact.AddComponent<SpriteRenderer>();
+            
+            if (lightningBoltSprite != null)
+            {
+                impactRenderer.sprite = lightningBoltSprite;
+            }
+            else
         {
             // Fallback: Create texture scaled to impact area
             int impactTextureSize = Mathf.RoundToInt(2f * 80);
@@ -2366,8 +2423,10 @@ public class WeaponClassController : MonoBehaviour
             impactTexture.SetPixels(pixels);
             impactTexture.Apply();
             impactRenderer.sprite = Sprite.Create(impactTexture, new Rect(0, 0, impactTextureSize, impactTextureSize), Vector2.one * 0.5f);
+            }
+            impactRenderer.sortingLayerName = "Player";
+            impactRenderer.sortingOrder = 0;
         }
-        impactRenderer.sortingOrder = 10;
         
         // Lightning and impact duration (using serialized parameters)
         yield return new WaitForSeconds(lightningDuration);
@@ -2961,12 +3020,12 @@ public class WeaponClassController : MonoBehaviour
             // Unfreeze Z rotation for flip animation
             rb.freezeRotation = false;
             
-            // Clear existing velocity and apply diagonal force with more height
+            // Clear existing velocity and apply diagonal force with separate horizontal and vertical forces
             rb.linearVelocity = Vector2.zero;
-            Vector2 flipVelocity = new Vector2(flipDirection.x * dashForce * 1f, dashForce * 1.2f); // Increased upward velocity
-            rb.linearVelocity = flipVelocity; // Use direct velocity instead of AddForce
+            Vector2 flipVelocity = new Vector2(flipDirection.x * dashForce, flipUpwardForce); // Separate horizontal and vertical forces
+            rb.linearVelocity = flipVelocity;
             
-            Debug.Log($"Flip Debug - Direction: {flipDirection}, FlipVelocity: {flipVelocity}, RB Mass: {rb.mass}");
+            Debug.Log($"Flip Debug - Direction: {flipDirection}, FlipVelocity: {flipVelocity}, Horizontal: {dashForce}, Vertical: {flipUpwardForce}");
         }
         
         // Create damage zone during flip
@@ -3025,11 +3084,11 @@ public class WeaponClassController : MonoBehaviour
         // Add collider
         BoxCollider2D collider = damageZone.AddComponent<BoxCollider2D>();
         collider.isTrigger = true;
-        collider.size = new Vector2(swordRange * 1.5f, swordRange * 1.5f); // Larger damage area
+        collider.size = new Vector2(flipDamageWidth, flipDamageHeight); // Use serialized flip damage size
         
         // Add damage component
         DamageObject damageComponent = damageZone.AddComponent<DamageObject>();
-        damageComponent.damageAmount = playerMovement.GetModifiedMeleeDamage((int)(swordDamage * 1.5f)); // 50% more damage
+        damageComponent.damageAmount = playerMovement.GetModifiedMeleeDamage(flipDamage); // Use serialized flip damage
         damageComponent.damageRate = 0.1f; // Fast damage rate for flip attack
         
         // Use reflection to set the private excludePlayerLayer field
@@ -3050,9 +3109,8 @@ public class WeaponClassController : MonoBehaviour
         SpriteRenderer flipRenderer = damageZone.AddComponent<SpriteRenderer>();
         
         // Create golden rectangle sprite for flip attack (scaled to match collider)
-        float flipSize = swordRange * 1.5f;
-        int textureWidth = Mathf.RoundToInt(flipSize * 64); 
-        int textureHeight = Mathf.RoundToInt(flipSize * 64); 
+        int textureWidth = Mathf.RoundToInt(flipDamageWidth * 64); 
+        int textureHeight = Mathf.RoundToInt(flipDamageHeight * 64); 
         Texture2D flipTexture = new Texture2D(textureWidth, textureHeight);
         Color[] pixels = new Color[textureWidth * textureHeight];
         for (int i = 0; i < pixels.Length; i++)
@@ -3063,11 +3121,111 @@ public class WeaponClassController : MonoBehaviour
         flipTexture.Apply();
         
         flipRenderer.sprite = Sprite.Create(flipTexture, new Rect(0, 0, textureWidth, textureHeight), Vector2.one * 0.5f);
-        flipRenderer.sortingOrder = 10;
+        flipRenderer.sortingLayerName = "Player";
+        flipRenderer.sortingOrder = 0;
         
         flipDamageZone = damageZone;
         
         Debug.Log("Flip damage zone created with damage: " + damageComponent.damageAmount);
+    }
+    
+    // ===== WEAPON SHARD PASSIVE ABILITIES =====
+    // Storm, Whisper, and Valor Shard passive abilities
+    
+    private void UpdatePassiveAbilities()
+    {
+        // Storm Shard Movement Passive - 5% swiftness while moving
+        UpdateStormMovementPassive();
+    }
+    
+    private void UpdateStormMovementPassive()
+    {
+        // Only apply if Storm Shard is equipped in either slot
+        bool hasStormShard = equippedShards[0] == ShardType.StormShard || equippedShards[1] == ShardType.StormShard;
+        if (!hasStormShard || playerMovement == null) return;
+        
+        // Check movement at specified intervals
+        if (Time.time >= lastMovementCheckTime + stormMovementCheckInterval)
+        {
+            lastMovementCheckTime = Time.time;
+            
+            // Check if player is moving horizontally
+            bool isMovingNow = playerMovement.IsMovingHorizontally();
+            
+            if (isMovingNow && !wasMovingLastCheck)
+            {
+                // Player started moving - add a swiftness stack
+                ApplyStormMovementBuff();
+            }
+            else if (!isMovingNow && wasMovingLastCheck)
+            {
+                // Player stopped moving - no new stacks but existing ones will naturally expire
+                Debug.Log("Storm Shard: Player stopped moving, swiftness stacks will expire naturally");
+            }
+            
+            wasMovingLastCheck = isMovingNow;
+        }
+    }
+    
+    private void ApplyStormMovementBuff()
+    {
+        string buffKey = "StormMovementSwiftness";
+        
+        // Track current stacks
+        if (!passiveBuffStacks.ContainsKey(buffKey))
+        {
+            passiveBuffStacks[buffKey] = 0;
+        }
+        
+        // Only add if under stack limit
+        if (passiveBuffStacks[buffKey] < maxStormMovementStacks)
+        {
+            passiveBuffStacks[buffKey]++;
+            
+            // Apply swiftness buff through PlayerMovement system
+            playerMovement.ApplyBuff(PlayerMovement.BuffType.Swiftness, stormMovementSwiftnessPercent, stormMovementBuffDuration);
+            
+            Debug.Log($"Storm Movement Passive: Applied {stormMovementSwiftnessPercent}% Swiftness (Stack {passiveBuffStacks[buffKey]}/{maxStormMovementStacks})");
+        }
+        else
+        {
+            // At max stacks - just refresh duration by applying another buff
+            playerMovement.ApplyBuff(PlayerMovement.BuffType.Swiftness, stormMovementSwiftnessPercent, stormMovementBuffDuration);
+            Debug.Log($"Storm Movement Passive: Refreshed swiftness buff (Max stacks: {maxStormMovementStacks})");
+        }
+    }
+    
+    // Whisper Shard Attack Passive - buffs on enemy hits
+    public void ApplyWhisperAttackPassive()
+    {
+        // Only apply if Whisper Shard is equipped in either slot
+        bool hasWhisperShard = equippedShards[0] == ShardType.WhisperShard || equippedShards[1] == ShardType.WhisperShard;
+        if (!hasWhisperShard || playerMovement == null) return;
+        
+        string buffKey = "WhisperAttackBuff";
+        
+        // Track current stacks
+        if (!passiveBuffStacks.ContainsKey(buffKey))
+        {
+            passiveBuffStacks[buffKey] = 0;
+        }
+        
+        // Only add if under stack limit
+        if (passiveBuffStacks[buffKey] < maxWhisperAttackStacks)
+        {
+            passiveBuffStacks[buffKey]++;
+            
+            // Apply attack buff through PlayerMovement system
+            playerMovement.ApplyBuff(PlayerMovement.BuffType.Strength, whisperAttackBuffPercent, whisperAttackBuffDuration);
+            
+            Debug.Log($"Whisper Attack Passive: Applied {whisperAttackBuffPercent}% Attack buff (Stack {passiveBuffStacks[buffKey]}/{maxWhisperAttackStacks})");
+        }
+        else
+        {
+            // At max stacks - just refresh duration
+            playerMovement.ApplyBuff(PlayerMovement.BuffType.Strength, whisperAttackBuffPercent, whisperAttackBuffDuration);
+            Debug.Log($"Whisper Attack Passive: Refreshed attack buff (Max stacks: {maxWhisperAttackStacks})");
+        }
     }
     
     // ===== VALOR SHARD PASSIVE BUFF SYSTEM =====
@@ -3080,11 +3238,11 @@ public class WeaponClassController : MonoBehaviour
     {
         if (equippedShards[activeSlotIndex] != ShardType.ValorShard || playerMovement == null) return;
         
-        // Apply aegis shield buff (fixed amount based on configuration)
-        playerMovement.ApplyAegisBuff();
+        // Apply aegis shield buff with Valor Shard cap (percentage based on configuration)
+        playerMovement.ApplyValorAttackAegisBuff(doubleClickAegisPercent, valorAegisCapPercent);
         
         // Apply durability buff (flat health increase)
-        playerMovement.ApplyBuff(BuffType.Durability, doubleClickBuffDuration);
+        playerMovement.ApplyBuff(PlayerMovement.BuffType.Durability, doubleClickDurabilityAmount, doubleClickBuffDuration);
         
         Debug.Log($"Valor Double-Click: Applied {doubleClickAegisPercent}% Aegis Shield + {doubleClickDurabilityAmount} Durability for {doubleClickBuffDuration}s");
     }
@@ -3097,7 +3255,7 @@ public class WeaponClassController : MonoBehaviour
         if (equippedShards[activeSlotIndex] != ShardType.ValorShard || playerMovement == null) return;
         
         // Apply strength buff (attack damage increase)
-        playerMovement.ApplyBuff(BuffType.Strength, tripleClickBuffDuration);
+        playerMovement.ApplyBuff(PlayerMovement.BuffType.Strength, tripleClickAttackPercent, tripleClickBuffDuration);
         
         Debug.Log($"Valor Triple-Click: Applied {tripleClickAttackPercent}% Attack buff for {tripleClickBuffDuration}s");
     }
@@ -3125,7 +3283,7 @@ public class WeaponClassController : MonoBehaviour
             killBuffStacks[killBuffKey]++;
             
             // Apply strength buff for each stack
-            playerMovement.ApplyBuff(BuffType.Strength, killBuffDuration);
+            playerMovement.ApplyBuff(PlayerMovement.BuffType.Strength, killAttackPercent, killBuffDuration);
             
             Debug.Log($"Valor Kill: Applied {killAttackPercent}% Attack buff (Stack {killBuffStacks[killBuffKey]}/{maxKillBuffStacks}) for {killBuffDuration}s");
             
@@ -3162,8 +3320,8 @@ public class WeaponClassController : MonoBehaviour
         // Only apply if charge level meets minimum requirement
         if (chargeLevel >= minWaveChargesForBuff)
         {
-            // Apply aegis shield buff
-            playerMovement.ApplyAegisBuff();
+            // Apply aegis shield buff with Valor Shard cap (percentage based on configuration)
+            playerMovement.ApplyValorAttackAegisBuff(waveChargeAegisPercent, valorAegisCapPercent);
             
             Debug.Log($"Valor Wave Charge: Applied {waveChargeAegisPercent}% Aegis Shield for {chargeLevel}-charge wave (duration: {waveChargeBuffDuration}s)");
         }
