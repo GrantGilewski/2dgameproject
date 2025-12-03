@@ -33,7 +33,10 @@ public class MainMenu : MonoBehaviour
     {
         selectedSlot = slot;
         UpdateSlotInfo(slot);
+        Debug.Log("Selected slot: " + selectedSlot);
+
     }
+
     // UpdateSlotInfo: Checks if a save file exists for the given slot.
     // If it does, display the last saved timestamp. If not, show "Empty Slot".
 
@@ -54,27 +57,32 @@ public class MainMenu : MonoBehaviour
     // Loads the save data from the selected slot, switches to the saved scene,
     // and applies the player’s saved position/stats.
 
-    public void LoadSelectedSlot()
+    public void ContinueFromSlot(int slot)
     {
-        SaveData data = SaveSystem.LoadGame(selectedSlot);
-        if (data == null) return;
-
-        pendingData = data;
-        SceneManager.sceneLoaded += OnSceneLoaded;
-        SceneManager.LoadScene(data.sceneName);
-    }
-
-
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        if (pendingData != null && PlayerManager.Instance != null)
+        SaveData data = SaveSystem.LoadGame(slot);
+        if (data == null)
         {
-            PlayerManager.Instance.ApplySaveData(pendingData);
-            LogManager.instance.log("Applied save data after scene load.",LogManager.INFO);
-            pendingData = null;
+            Debug.LogWarning("Slot " + slot + " is empty!");
+            return;
         }
-        SceneManager.sceneLoaded -= OnSceneLoaded; // unsubscribe
+        Debug.Log("Confirming continue from slot: " + selectedSlot);
+
+
+        GameManager.Instance.LoadGame(data);
     }
+
+
+    public void ConfirmContinue()
+    {
+        if (selectedSlot == -1)
+        {
+            Debug.LogWarning("No slot selected!");
+            return;
+        }
+
+        ContinueFromSlot(selectedSlot);
+    }
+
 
     // ContinueGame: Convenience method for a "Continue" button.
     // Finds the most recent save slot and loads it automatically.
@@ -85,7 +93,7 @@ public class MainMenu : MonoBehaviour
         if (latestSlot != -1)
         {
             selectedSlot = latestSlot;
-            LoadSelectedSlot();
+            ContinueFromSlot(latestSlot);
         }
     }
     // FindMostRecentSlot: Loops through all slots and finds the one with the newest timestamp.

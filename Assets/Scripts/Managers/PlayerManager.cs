@@ -14,18 +14,25 @@ public class PlayerManager : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
+
     public SaveData GetSaveData()
     {
         SaveData data = new SaveData();
-        data.sceneName = SceneManager.GetActiveScene().name; // critical line
-                                                             // ... other fields
+        data.sceneName = SceneManager.GetActiveScene().name;
+
+        // Save position
+        data.playerX = playerTransform.position.x;
+        data.playerY = playerTransform.position.y;
+        data.playerZ = playerTransform.position.z;
+
+        Debug.Log("Saving position: " + playerTransform.position);
         return data;
     }
 
-
-
     public void ApplySaveData(SaveData data)
     {
+        Debug.Log("Applying save data: " + data.playerX + "," + data.playerY + "," + data.playerZ);
+
         if (playerTransform == null)
         {
             Debug.LogError("Player Transform not assigned!");
@@ -33,9 +40,6 @@ public class PlayerManager : MonoBehaviour
         }
 
         playerTransform.position = new Vector3(data.playerX, data.playerY, data.playerZ);
-        health = data.health;
-        inventory = data.inventory;
-        Debug.Log("Applied save data: position " + playerTransform.position);
+        Debug.Log("Player moved to: " + playerTransform.position);
     }
-
 }
