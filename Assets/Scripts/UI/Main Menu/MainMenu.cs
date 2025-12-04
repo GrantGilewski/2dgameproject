@@ -6,7 +6,7 @@ using TMPro;
 
 public class MainMenu : MonoBehaviour
 {
-    public GameObject slotPanel;    // Panel that holds the save slot buttons
+    public GameObject slotPanel;// Panel that holds the save slot buttons
     public TextMeshProUGUI slotInfoText; // Text element that displays info about the selected slot
     private int selectedSlot = -1;    // Tracks which slot the player has selected (-1 = none
     public GameObject mainPanel;
@@ -27,6 +27,7 @@ public class MainMenu : MonoBehaviour
         mainPanel.SetActive(true);
         slotPanel.SetActive(false);
     }
+
     // SelectSlot: Called when the player clicks a slot button.
     // Stores the chosen slot index and updates the info text with metadata (timestamp or "Empty Slot").
     public void SelectSlot(int slot)

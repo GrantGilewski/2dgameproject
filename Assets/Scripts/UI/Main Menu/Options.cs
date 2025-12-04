@@ -10,7 +10,7 @@ public class OptionsMenu : MonoBehaviour
         OptionsPanel.SetActive(true);
     }
 
-    public void CloseOptions()
+    public void CloseNewGame()
     {
         OptionsPanel.SetActive(false);
     }
