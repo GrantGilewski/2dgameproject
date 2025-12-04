@@ -11,7 +11,7 @@ public class PauseMenuScript : MonoBehaviour
     public GameObject pauseMenuUI; // assign in Inspector
     public static bool isPaused = false;
     public GameObject mainPanel;
-    public GameObject optionsPanel;   
+    public GameObject optionsPanel;
     public GameObject slotPanel;
     public GameObject overwritePopup;
     public TMPro.TextMeshProUGUI slotInfoText;
@@ -136,7 +136,7 @@ public class PauseMenuScript : MonoBehaviour
     public void OverwriteYes()
     {
         SaveSystem.SaveGame(PlayerManager.Instance.GetSaveData(), selectedSlot);
-        slotPanel.SetActive(true); 
+        slotPanel.SetActive(true);
         overwritePopup.SetActive(false);
         BackToMain();
     }
