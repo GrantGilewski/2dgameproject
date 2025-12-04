@@ -3,14 +3,15 @@ using UnityEngine.SceneManagement;
 using System.Collections;
 using System.IO;
 using TMPro;
+using System;
 
 
 public class PauseMenuScript : MonoBehaviour
 {
     public GameObject pauseMenuUI; // assign in Inspector
-    private bool isPaused = false;
+    public static bool isPaused = false;
     public GameObject mainPanel;
-    public GameObject optionsPanel;   
+    public GameObject optionsPanel;
     public GameObject slotPanel;
     public GameObject overwritePopup;
     public TMPro.TextMeshProUGUI slotInfoText;
@@ -18,14 +19,19 @@ public class PauseMenuScript : MonoBehaviour
 
     private int selectedSlot = -1; // tracks which slot is currently selected
 
-
     //Pauses Game 
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (isPaused) Resume();
-            else Pause();
+            if (isPaused)
+            {
+                Resume();
+            }
+            else
+            {
+                Pause();
+            }
         }
     }
 
@@ -34,6 +40,7 @@ public class PauseMenuScript : MonoBehaviour
     //Resume: Turns off the panel and returns to the game 
     public void Resume()
     {
+        BackToMain();
         pauseMenuUI.SetActive(false);
         Time.timeScale = 1f;
         isPaused = false;
@@ -80,6 +87,7 @@ public class PauseMenuScript : MonoBehaviour
     public void LoadMainMenu()
     {
         Time.timeScale = 1f; // reset time before switching scenes
+        isPaused = false;
         SceneManager.LoadScene("MainMenu"); //
     }
     //Slot Selection 
@@ -114,6 +122,7 @@ public class PauseMenuScript : MonoBehaviour
         string path = Application.persistentDataPath + "/save" + selectedSlot + ".json";
         if (File.Exists(path))
         {
+            slotPanel.SetActive(false);
             overwritePopup.SetActive(true);
         }
         else
@@ -127,12 +136,14 @@ public class PauseMenuScript : MonoBehaviour
     public void OverwriteYes()
     {
         SaveSystem.SaveGame(PlayerManager.Instance.GetSaveData(), selectedSlot);
+        slotPanel.SetActive(true);
         overwritePopup.SetActive(false);
         BackToMain();
     }
 
     public void OverwriteNo()
     {
+        slotPanel.SetActive(true);
         overwritePopup.SetActive(false);
     }
 

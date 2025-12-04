@@ -23,17 +23,21 @@ public class EnemyBehavior : MonoBehaviour
     [SerializeField] private float attackRange = 2f; // Range to attack player
     [SerializeField] private float attackCooldown = 2f; // Time between attacks
     [SerializeField] private float attackDamage = 15f; // Damage dealt by enemy attacks
-    [SerializeField] private float attackDuration = 0.3f; // How long attack damage object lasts
+    [SerializeField] private float attackDuration = 0.8f; // How long attack damage object lasts (increased for longer animations)
     [SerializeField] private Vector2 attackSize = new Vector2(1f, 1f); // Size of attack damage object
     [SerializeField] private float jumpForce = 8f; // Force applied when enemy jumps
     [SerializeField] private float jumpCooldown = 1f; // Time between jumps
     [SerializeField] private float minHeightDifferenceToJump = 1.5f; // Minimum height difference to trigger jump
+    
+    [Header("Animation Settings")]
+    [SerializeField] private bool alternateAttacks = true; // Whether to alternate between attack animations
     
     [Header("Collision")]
     [SerializeField] private LayerMask playerLayerMask = 1; // What layers count as player
     
     // Private variables
     private SpriteRenderer spriteRenderer;
+    private Animator animator;
     private Collider2D enemyCollider;
     private Rigidbody2D rb;
     private int currentHealth;
@@ -43,10 +47,13 @@ public class EnemyBehavior : MonoBehaviour
     
     // Aggression System
     private Transform playerTransform;
-    private bool playerInRange = false;
     private float lastAttackTime = 0f;
     private bool isFacingRight = true;
     private float lastJumpTime = 0f;
+    
+    // Animation System
+    private bool useNextAttackAnimation = false; // For alternating attacks
+    private bool isAttacking = false; // To prevent animation conflicts during attacks
     
     // Damage Object Integration
     private bool inDamageZone = false;
@@ -72,6 +79,10 @@ public class EnemyBehavior : MonoBehaviour
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            
+        animator = GetComponent<Animator>();
+        if (animator == null)
+            animator = GetComponentInChildren<Animator>();
             
         enemyCollider = GetComponent<Collider2D>();
         rb = GetComponent<Rigidbody2D>();
@@ -116,8 +127,11 @@ public class EnemyBehavior : MonoBehaviour
             playerTransform = player.transform;
         }
         
-        // Set up collision layer - make sure enemy doesn't collide with player
+        // Set up collision layer - make sure entity doesn't collide with player or other entities
         SetupCollisionLayers();
+        
+        // Ensure collision ignoring works with any entities that might have spawned after this one
+        StartCoroutine(SetupCollisionIgnoringDelayed());
         
         // Initialize health and position
         currentHealth = maxHealth;
@@ -135,8 +149,6 @@ public class EnemyBehavior : MonoBehaviour
         
         // Create health bar
         CreateHealthBar();
-        
-        Debug.Log($"Enemy {gameObject.name} initialized at {spawnPosition} with {maxHealth} health. Aggressive: {isAggressive}");
     }
     
     void Update()
@@ -208,6 +220,9 @@ public class EnemyBehavior : MonoBehaviour
                 Debug.LogError($"Error in HandleAggression for {gameObject.name}: {e.Message}");
             }
         }
+        
+        // Update animations based on current state
+        UpdateAnimations();
     }
     
     private bool ValidateComponents()
@@ -242,6 +257,66 @@ public class EnemyBehavior : MonoBehaviour
         return true; // Continue processing even if some components are missing
     }
     
+    private void UpdateAnimations()
+    {
+        if (animator == null) return;
+        
+        // Update animator parameters based on current state
+        animator.SetBool("isDead", isDead);
+        animator.SetBool("isAttacking", isAttacking);
+        
+        if (!isDead && !isAttacking)
+        {
+            // Check if moving (has horizontal velocity)
+            bool isMoving = rb != null && Mathf.Abs(rb.linearVelocity.x) > 0.1f;
+            animator.SetBool("isWalking", isMoving);
+        }
+        else
+        {
+            animator.SetBool("isWalking", false);
+        }
+    }
+    
+    private void PlayAttackAnimation()
+    {
+        if (animator == null) return;
+        
+        // Set attacking flag to prevent animation interruption
+        isAttacking = true;
+        
+        if (alternateAttacks)
+        {
+            // Set attack type parameter for alternating attacks
+            int attackType = useNextAttackAnimation ? 1 : 0;
+            animator.SetInteger("attackType", attackType);
+            useNextAttackAnimation = !useNextAttackAnimation;
+        }
+        else
+        {
+            // Always use attack type 0 (Attack1)
+            animator.SetInteger("attackType", 0);
+        }
+        
+        // The isAttacking parameter will trigger the appropriate attack transition
+        animator.SetBool("isAttacking", true);
+        
+        // Clear attacking flag after attack duration
+        StartCoroutine(ClearAttackingFlag());
+    }
+    
+    private IEnumerator ClearAttackingFlag()
+    {
+        // Wait for attack duration plus a small buffer
+        yield return new WaitForSeconds(attackDuration + 0.1f);
+        isAttacking = false;
+        
+        // Clear the attacking parameter in the animator
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
+        }
+    }
+    
     // Damage Object Integration - Trigger Events
     void OnTriggerEnter2D(Collider2D other)
     {
@@ -250,6 +325,17 @@ public class EnemyBehavior : MonoBehaviour
         DamageObject damageObj = other.GetComponent<DamageObject>();
         if (damageObj != null)
         {
+            // Check if this damage object can actually damage enemies
+            if (!damageObj.canDamageEnemies)
+            {
+                return; // Don't enter damage zone for objects that can't damage enemies
+            }
+            
+            // Additional check: don't damage ourselves if we're tagged as Enemy
+            if (gameObject.CompareTag("Enemy") && !damageObj.canDamageEnemies)
+            {
+                return;
+            }
             inDamageZone = true;
             currentDamageObject = damageObj;
             lastDamageTime = 0f; // Reset timer to cause immediate damage
@@ -276,6 +362,21 @@ public class EnemyBehavior : MonoBehaviour
         DamageObject damageObj = collision.gameObject.GetComponent<DamageObject>();
         if (damageObj != null)
         {
+            // Check if this damage object can actually damage enemies
+            if (!damageObj.canDamageEnemies)
+            {
+                Debug.Log($"Enemy {gameObject.name} ignoring collision damage object that can't damage enemies");
+                return; // Don't enter damage zone for objects that can't damage enemies
+            }
+            
+            // Additional check: don't damage ourselves if we're tagged as Enemy
+            if (gameObject.CompareTag("Enemy") && !damageObj.canDamageEnemies)
+            {
+                Debug.Log($"Enemy {gameObject.name} ignoring collision damage object due to Enemy tag");
+                return;
+            }
+            
+            Debug.Log($"Enemy {gameObject.name} entering damage zone from collision with {collision.gameObject.name}");
             inDamageZone = true;
             currentDamageObject = damageObj;
             lastDamageTime = 0f; // Reset timer to cause immediate damage
@@ -296,19 +397,23 @@ public class EnemyBehavior : MonoBehaviour
     
     private void HandleAggression()
     {
-        if (playerTransform == null || rb == null) return;
+        if (rb == null) return;
         
-        float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+        // Find the nearest target (player or dummy)
+        Transform nearestTarget = FindNearestTarget();
+        if (nearestTarget == null) return;
         
-        // Check if player is within detection radius
-        playerInRange = distanceToPlayer <= detectionRadius;
+        float distanceToTarget = Vector3.Distance(transform.position, nearestTarget.position);
         
-        if (playerInRange)
+        // Check if target is within detection radius
+        bool targetInRange = distanceToTarget <= detectionRadius;
+        
+        if (targetInRange)
         {
-            // Follow player if not in attack range
-            if (distanceToPlayer > attackRange)
+            // Follow target if not in attack range
+            if (distanceToTarget > attackRange)
             {
-                FollowPlayer();
+                FollowTarget(nearestTarget);
             }
             else
             {
@@ -321,12 +426,12 @@ public class EnemyBehavior : MonoBehaviour
                 // Try to attack if cooldown is ready
                 if (Time.time - lastAttackTime >= attackCooldown)
                 {
-                    AttackPlayer();
+                    AttackTarget(nearestTarget);
                 }
             }
             
-            // Face the player
-            FacePlayer();
+            // Face the target
+            FaceTarget(nearestTarget);
         }
         else
         {
@@ -336,6 +441,96 @@ public class EnemyBehavior : MonoBehaviour
                 rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
             }
         }
+    }
+
+    private Transform FindNearestTarget()
+    {
+        Transform nearestTarget = null;
+        float nearestDistance = float.MaxValue;
+        
+        // Check player first
+        if (playerTransform != null)
+        {
+            float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+            if (distanceToPlayer < nearestDistance)
+            {
+                nearestDistance = distanceToPlayer;
+                nearestTarget = playerTransform;
+            }
+        }
+        
+        // Check for nearby attack dummies
+        GameObject[] dummies = GameObject.FindGameObjectsWithTag("PlayerSummon");
+        foreach (GameObject dummy in dummies)
+        {
+            if (dummy != null)
+            {
+                float distanceToDummy = Vector3.Distance(transform.position, dummy.transform.position);
+                if (distanceToDummy < nearestDistance)
+                {
+                    nearestDistance = distanceToDummy;
+                    nearestTarget = dummy.transform;
+                }
+            }
+        }
+        
+        return nearestTarget;
+    }
+
+    private void FollowTarget(Transform target)
+    {
+        if (rb == null || target == null) return;
+        
+        Vector3 direction = (target.position - transform.position).normalized;
+        
+        // Check if target is significantly above enemy and we should jump
+        float heightDifference = target.position.y - transform.position.y;
+        bool shouldJump = heightDifference > minHeightDifferenceToJump && 
+                         Mathf.Abs(direction.x) > 0.1f &&
+                         rb.linearVelocity.y > -0.1f; // Only jump if not already falling
+        
+        // Apply horizontal movement
+        rb.linearVelocity = new Vector2(direction.x * followSpeed, rb.linearVelocity.y);
+        
+        // Apply jump if needed
+        if (shouldJump && Time.time - lastJumpTime >= jumpCooldown)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            lastJumpTime = Time.time;
+        }
+    }
+
+    private void AttackTarget(Transform target)
+    {
+        if (target == null) return;
+        
+        // Face the target before attacking
+        FaceTarget(target);
+        
+        // Play attack animation
+        PlayAttackAnimation();
+        
+        // Check if target is a dummy
+        AttackDummy dummy = target.GetComponent<AttackDummy>();
+        if (dummy != null)
+        {
+            dummy.TakeDamage(attackDamage);
+            lastAttackTime = Time.time;
+            Debug.Log($"Enemy attacked dummy for {attackDamage} damage");
+            return;
+        }
+        
+        // Check if target is the player
+        PlayerMovement playerMovement = target.GetComponent<PlayerMovement>();
+        if (playerMovement != null)
+        {
+            playerMovement.TakeDamageFromObject((int)attackDamage);
+            lastAttackTime = Time.time;
+            Debug.Log($"Enemy attacked player for {attackDamage} damage");
+            return;
+        }
+        
+        lastAttackTime = Time.time; // Prevent spam even if target wasn't valid
     }
     
     private void FollowPlayer()
@@ -362,11 +557,11 @@ public class EnemyBehavior : MonoBehaviour
         rb.linearVelocity = new Vector2(horizontalMovement, rb.linearVelocity.y);
     }
     
-    private void FacePlayer()
+    private void FaceTarget(Transform target)
     {
-        if (spriteRenderer == null || playerTransform == null) return;
+        if (spriteRenderer == null || target == null) return;
         
-        bool shouldFaceRight = playerTransform.position.x > transform.position.x;
+        bool shouldFaceRight = target.position.x > transform.position.x;
         
         if (shouldFaceRight != isFacingRight)
         {
@@ -407,6 +602,16 @@ public class EnemyBehavior : MonoBehaviour
         // Set that this should NOT damage enemies (only player)
         damageComponent.canDamageEnemies = false;
         
+        // Also exclude Enemy layer and NPC layer to be extra safe
+        int enemyLayer = LayerMask.NameToLayer("Enemy");
+        int npcLayer = LayerMask.NameToLayer("NPC");
+        LayerMask excludeMask = 0;
+        
+        if (enemyLayer != -1) excludeMask |= (1 << enemyLayer);
+        if (npcLayer != -1) excludeMask |= (1 << npcLayer);
+        
+        damageComponent.excludeLayers = excludeMask;
+        
         // Visual indicator (temporary - will be replaced with graphics later)
         SpriteRenderer attackRenderer = attack.AddComponent<SpriteRenderer>();
         
@@ -432,8 +637,8 @@ public class EnemyBehavior : MonoBehaviour
     
     private void SetupCollisionLayers()
     {
-        // Set this GameObject to NPC|Enemy layer
-        gameObject.layer = LayerMask.NameToLayer("NPC|Enemy");
+        // Set this GameObject to Entities layer
+        gameObject.layer = LayerMask.NameToLayer("Entities");
         
         // Find player and ignore collision
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -443,7 +648,23 @@ public class EnemyBehavior : MonoBehaviour
             if (playerCollider != null && enemyCollider != null)
             {
                 Physics2D.IgnoreCollision(enemyCollider, playerCollider, true);
-                Debug.Log($"Enemy {gameObject.name} - Collision with player disabled");
+            }
+        }
+        
+        // Make entities ignore collisions with each other
+        SetupEntityToEntityCollisionIgnoring();
+    }
+    
+    private void SetupEntityToEntityCollisionIgnoring()
+    {
+        // Find all other entities (enemies/NPCs/dummies) and ignore collisions with them
+        EnemyBehavior[] allEntities = FindObjectsByType<EnemyBehavior>(FindObjectsSortMode.None);
+        
+        foreach (EnemyBehavior otherEntity in allEntities)
+        {
+            if (otherEntity != this && otherEntity.enemyCollider != null && enemyCollider != null)
+            {
+                Physics2D.IgnoreCollision(enemyCollider, otherEntity.enemyCollider, true);
             }
         }
     }
@@ -481,17 +702,22 @@ public class EnemyBehavior : MonoBehaviour
             rb.angularVelocity = 0f;
         }
         
+        // Clear any attack state and set death parameter
+        isAttacking = false;
+        if (animator != null)
+        {
+            animator.SetBool("isAttacking", false);
+            animator.SetBool("isDead", true);
+        }
+        
         // Change sprite color to death color and keep it visible
         if (spriteRenderer != null)
         {
             spriteRenderer.color = deathColor;
         }
         
-        // Disable collider so it can't take more damage or be interacted with
-        if (enemyCollider != null)
-        {
-            enemyCollider.enabled = false;
-        }
+        // Keep collider enabled for ground collision - damage is prevented by isDead checks
+        // No need to disable collider as all damage methods check isDead status
         
         // Clean up all damage-related state
         inDamageZone = false;
@@ -499,7 +725,6 @@ public class EnemyBehavior : MonoBehaviour
         lastDamageTime = 0f;
         
         // Reset aggression state
-        playerInRange = false;
         lastAttackTime = 0f;
         
         // Update health bar to show death state
@@ -539,6 +764,17 @@ public class EnemyBehavior : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
         
+        // Reset animation state
+        isAttacking = false;
+        useNextAttackAnimation = false;
+        if (animator != null)
+        {
+            animator.SetBool("isDead", false);
+            animator.SetBool("isAttacking", false);
+            animator.SetBool("isWalking", false);
+            animator.SetInteger("attackType", 0);
+        }
+        
         // Reset health bar animation values
         targetFillAmount = 1f;
         currentFillAmount = 1f;
@@ -560,11 +796,7 @@ public class EnemyBehavior : MonoBehaviour
             spriteRenderer.color = originalColor;
         }
         
-        // Re-enable collider
-        if (enemyCollider != null)
-        {
-            enemyCollider.enabled = true;
-        }
+        // Collider stays enabled throughout, no need to re-enable
         
         // Hide respawn timer
         if (respawnTimerText != null)
@@ -573,7 +805,6 @@ public class EnemyBehavior : MonoBehaviour
         }
         
         // Reset aggression state
-        playerInRange = false;
         lastAttackTime = 0f;
         
         // Update health bar
@@ -710,6 +941,25 @@ public class EnemyBehavior : MonoBehaviour
             {
                 healthBarFill.color = new Color(1f, 0f, 0f, 0.9f); // Red
             }
+        }
+    }
+    
+    private IEnumerator SetupCollisionIgnoringDelayed()
+    {
+        // Wait a short time for other entities to potentially spawn
+        yield return new WaitForSeconds(0.1f);
+        
+        // Re-run collision ignoring setup to catch any newly spawned entities
+        SetupEntityToEntityCollisionIgnoring();
+    }
+    
+    // Public method to update collision ignoring when new entities are spawned
+    public static void UpdateAllEntityCollisions()
+    {
+        EnemyBehavior[] allEntities = FindObjectsByType<EnemyBehavior>(FindObjectsSortMode.None);
+        foreach (EnemyBehavior entity in allEntities)
+        {
+            entity.SetupEntityToEntityCollisionIgnoring();
         }
     }
     

@@ -3,9 +3,6 @@ using UnityEngine.InputSystem;
 
 public class GameController : MonoBehaviour
 {
-    [Header("Core Game Settings")]
-    [SerializeField] private bool gameIsPaused = false;
-    
     private PlayerMovement playerMovement;
     
     void Start()
@@ -31,7 +28,6 @@ public class GameController : MonoBehaviour
     private void InitializeGame()
     {
         // TODO: Initialize game state, UI, score, etc.
-        Debug.Log("Game initialized!");
     }
     
     private void HandleGameInput()
@@ -39,29 +35,29 @@ public class GameController : MonoBehaviour
         // Handle pause menu, game state changes, etc. using new Input System
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
-            TogglePause();
+            // TogglePause();
         }
     }
     
-    private void TogglePause()
-    {
-        gameIsPaused = !gameIsPaused;
-        Time.timeScale = gameIsPaused ? 0f : 1f;
-        Debug.Log($"Game {(gameIsPaused ? "Paused" : "Resumed")}");
-    }
+    // Commented out to fix double pause bug
+
+    // private void TogglePause()
+    // {
+    //     gameIsPaused = !gameIsPaused;
+    //     Time.timeScale = gameIsPaused ? 0f : 1f;
+    //     Debug.Log($"Game {(gameIsPaused ? "Paused" : "Resumed")}");
+    // }
     
     // Public methods for other systems
-    public bool IsGamePaused() => gameIsPaused;
+    // public bool IsGamePaused() => gameIsPaused;
     
     public void RestartLevel()
     {
         // TODO: Implement level restart logic
-        Debug.Log("Level restarted!");
     }
     
     public void GameOver()
     {
         // TODO: Implement game over logic
-        Debug.Log("Game Over!");
     }
 }
