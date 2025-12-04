@@ -6,6 +6,8 @@ using UnityEngine.InputSystem.UI;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.UIElements;
+using Image = UnityEngine.UI.Image;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -188,8 +190,8 @@ public class PlayerMovement : MonoBehaviour
     private string currentTooltipType = "";
     private int ultimateBarUpdateCount = 0;
     private float lastLoggedUltimateCharge = -1f;
-    
-    // Weapon System
+
+    // Weapon Controller
     private WeaponClassController weaponController;
 
     void Awake()
@@ -304,6 +306,10 @@ public class PlayerMovement : MonoBehaviour
     
     private void GetInput()
     {
+        // Don't process player input while paused
+        if (PauseMenuScript.isPaused)
+            return;
+
         // Use new Input System
         horizontalInput = 0f;
         jumpInput = false;
@@ -910,7 +916,7 @@ public class PlayerMovement : MonoBehaviour
         // Create background (grey bar that shows full health bar area)
         GameObject backgroundGO = new GameObject("HealthBarBackground");
         backgroundGO.transform.SetParent(canvasGO.transform, false);
-        healthBarBackground = backgroundGO.AddComponent<Image>();
+        healthBarBackground = backgroundGO.AddComponent<UnityEngine.UI.Image>();
         
         // Set sprite for background
         // Create a simple white texture for the background
@@ -930,7 +936,7 @@ public class PlayerMovement : MonoBehaviour
         // Create fill (colored bar that shows current health)
         GameObject fillGO = new GameObject("HealthBarFill");
         fillGO.transform.SetParent(backgroundGO.transform, false); // Child of background
-        healthBarFill = fillGO.AddComponent<Image>();
+        healthBarFill = fillGO.AddComponent<UnityEngine.UI.Image>();
         
         // Create a white sprite for the fill
         Texture2D fillTexture = new Texture2D(1, 1);
@@ -939,9 +945,9 @@ public class PlayerMovement : MonoBehaviour
         healthBarFill.sprite = Sprite.Create(fillTexture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f);
         
         healthBarFill.color = Color.green;
-        healthBarFill.type = Image.Type.Filled;
-        healthBarFill.fillMethod = Image.FillMethod.Horizontal;
-        healthBarFill.fillOrigin = (int)Image.OriginHorizontal.Left; // Fill from left to right, empty from right to left
+        healthBarFill.type = UnityEngine.UI.Image.Type.Filled;
+        healthBarFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+        healthBarFill.fillOrigin = (int)UnityEngine.UI.Image.OriginHorizontal.Left; // Fill from left to right, empty from right to left
         
         RectTransform fillRect = fillGO.GetComponent<RectTransform>();
         fillRect.anchorMin = Vector2.zero;
@@ -997,9 +1003,29 @@ public class PlayerMovement : MonoBehaviour
         foreach (RaycastHit2D hit in hits)
         {
             // Skip our own colliders
-            if (hit.collider != playerCollider && hit.collider.gameObject != gameObject)
-            {
-                return true;
+            if (hit.collider != playerCollider && hit.collider.gameObject != gameObject) {
+
+                // Get PlatformEffector2D component
+                PlatformEffector2D collidedPE2D = hit.collider.gameObject.GetComponent<PlatformEffector2D>();
+                double collidedTop = hit.collider.gameObject.transform.position.y + hit.collider.gameObject.GetComponent<SpriteRenderer>().bounds.size.y;
+
+                if (collidedPE2D != null)
+                {
+                    if (collidedPE2D.useOneWay)
+                    {
+                        // One way collision only works if player is above it and if is not rotated between 90 and 270 degrees
+                        return (collidedPE2D.rotationalOffset < 90 || collidedPE2D.rotationalOffset > 270) && transform.position.y > collidedTop;
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    // Assume no one way property
+                    return true;
+                }
             }
         }
         
