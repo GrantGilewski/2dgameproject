@@ -35,7 +35,10 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Vector3 healthBarOffset = new Vector3(0, 1.5f, 0); // Offset above player
     [SerializeField] private Vector2 healthBarSize = new Vector2(2f, 0.3f); // Width and height of health bar
     
-    [Header("Sprite Animation")]
+    [Header("Animation System")]
+    [SerializeField] private RuntimeAnimatorController defaultPlayerAnimController = null; // Default animation when no shards equipped
+    
+    [Header("Legacy Sprite Animation (Fallback)")]
     [SerializeField] private Sprite idleSprite;
     [SerializeField] private Sprite walkingSprite1;
     [SerializeField] private Sprite walkingSprite2;
@@ -100,6 +103,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Collider")]
     [SerializeField] private CapsuleCollider2D playerCollider;
     private SpriteRenderer spriteRenderer;
+    private Animator playerAnimator;
 
     // Input
     private float horizontalInput;
@@ -113,6 +117,14 @@ public class PlayerMovement : MonoBehaviour
     private bool hasCeilingClearance = true; // Check if player has space above to jump
     private float animationTimer = 0f;
     private bool useFirstWalkSprite = true;
+    
+    // Animation State
+    private bool isPlayerAttacking = false;
+    private bool isPlayerJumping = false; 
+    private bool isPlayerWalking = false;
+    private bool isPlayerDead = false;
+    private int currentAttackType = 0; // 0=None, 1=Melee, 2=Projectile, 3=Ultimate
+    private RuntimeAnimatorController currentAnimController = null;
 
     private GameObject currentPlatform;
     
@@ -196,6 +208,18 @@ public class PlayerMovement : MonoBehaviour
         spriteRenderer = GetComponentInChildren<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = GetComponent<SpriteRenderer>();
+            
+        // Try to get Animator component
+        playerAnimator = GetComponentInChildren<Animator>();
+        if (playerAnimator == null)
+            playerAnimator = GetComponent<Animator>();
+            
+        // Initialize with default animation controller
+        if (playerAnimator != null && defaultPlayerAnimController != null)
+        {
+            playerAnimator.runtimeAnimatorController = defaultPlayerAnimController;
+            currentAnimController = defaultPlayerAnimController;
+        }
 
         // Prevent player from rotating when falling off edges
         rb.freezeRotation = true;
@@ -248,6 +272,7 @@ public class PlayerMovement : MonoBehaviour
         // Update new systems
         UpdateBuffs();
         UpdateScreenUI();
+        UpdateAnimationParameters();
         
         // Handle max health changes from durability buffs
         float newMaxHealth = GetModifiedMaxHealth();
@@ -355,6 +380,8 @@ public class PlayerMovement : MonoBehaviour
         
         if (spriteRenderer != null && !weaponMenuOpen && !isUsingWhisperShard)
         {
+            bool previousFlipX = spriteRenderer.flipX;
+            
             if (horizontalInput < -0.1f)
             {
                 spriteRenderer.flipX = true; // Face left
@@ -364,6 +391,12 @@ public class PlayerMovement : MonoBehaviour
             {
                 spriteRenderer.flipX = false; // Face right
                 //spriteRenderer.transform.localPosition = new Vector3(0.1f, spriteRenderer.transform.localPosition.y, spriteRenderer.transform.localPosition.z);
+            }
+            
+            // If facing direction changed, flip particle points
+            if (previousFlipX != spriteRenderer.flipX && weaponController != null)
+            {
+                weaponController.FlipParticlePoints(spriteRenderer.flipX);
             }
         }
         
@@ -1070,6 +1103,119 @@ public class PlayerMovement : MonoBehaviour
         return Mathf.Abs(horizontalInput) > 0.1f;
     }
     
+    // ===== ANIMATION CONTROLLER SYSTEM =====
+    
+    /// <summary>
+    /// Set the animation controller directly
+    /// </summary>
+    public void SetAnimationController(RuntimeAnimatorController controller)
+    {
+        if (playerAnimator == null) return;
+        
+        RuntimeAnimatorController targetController = controller ?? defaultPlayerAnimController;
+        
+        // Only switch if controller is different to avoid unnecessary changes
+        if (currentAnimController != targetController)
+        {
+            playerAnimator.runtimeAnimatorController = targetController;
+            currentAnimController = targetController;
+            Debug.Log($"Switched animation controller to: {(targetController != null ? targetController.name : "null")}");
+        }
+    }
+    
+    /// <summary>
+    /// Update animation parameters based on current player state
+    /// </summary>
+    public void UpdateAnimationParameters()
+    {
+        if (playerAnimator == null) return;
+        
+        // Fallback to default controller if no controller is set
+        if (currentAnimController == null)
+        {
+            if (defaultPlayerAnimController != null)
+            {
+                SetAnimationController(defaultPlayerAnimController);
+                Debug.Log("PlayerMovement: Fallback to default animation controller");
+            }
+            else
+            {
+                Debug.LogWarning("PlayerMovement: No animation controller available (default is null)");
+                return;
+            }
+        }
+        
+        // Update movement state
+        bool isMoving = IsMovingHorizontally();
+        if (isPlayerWalking != isMoving)
+        {
+            isPlayerWalking = isMoving;
+            playerAnimator.SetBool("isWalking", isPlayerWalking);
+        }
+        
+        // Update jumping state - should be true until player lands
+        bool isJumping = !isGrounded;
+        if (isPlayerJumping != isJumping)
+        {
+            isPlayerJumping = isJumping;
+            playerAnimator.SetBool("isJumping", isPlayerJumping);
+        }
+        
+        // Update other parameters
+        playerAnimator.SetBool("isDead", isPlayerDead);
+        playerAnimator.SetBool("isAttacking", isPlayerAttacking);
+        playerAnimator.SetInteger("attackType", currentAttackType);
+    }
+    
+    /// <summary>
+    /// Trigger attack animation with specific attack type
+    /// </summary>
+    public void TriggerAttackAnimation(int attackType, float duration = 0.5f)
+    {
+        if (playerAnimator == null) return;
+        
+        isPlayerAttacking = true;
+        currentAttackType = attackType;
+        playerAnimator.SetBool("isAttacking", true);
+        playerAnimator.SetInteger("attackType", attackType);
+        
+        // Reset attack state after duration
+        StartCoroutine(ResetAttackState(duration));
+        
+        Debug.Log($"Triggered attack animation: Type {attackType}");
+    }
+    
+    /// <summary>
+    /// Reset attack animation state
+    /// </summary>
+    private System.Collections.IEnumerator ResetAttackState(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        
+        isPlayerAttacking = false;
+        currentAttackType = 0;
+        if (playerAnimator != null)
+        {
+            playerAnimator.SetBool("isAttacking", false);
+            playerAnimator.SetInteger("attackType", 0);
+        }
+    }
+    
+    /// <summary>
+    /// Set death animation state
+    /// </summary>
+    public void SetDeathAnimation(bool isDead)
+    {
+        if (isPlayerDead != isDead)
+        {
+            isPlayerDead = isDead;
+            if (playerAnimator != null)
+            {
+                playerAnimator.SetBool("isDead", isDead);
+            }
+        }
+    }
+    
     // Ultimate System Methods
     public bool HasFullUltimate()
     {
@@ -1385,9 +1531,10 @@ public class PlayerMovement : MonoBehaviour
         
         RectTransform topRect = topOutlineGO.AddComponent<RectTransform>();
         topRect.anchorMin = new Vector2(0f, 1f);
-        topRect.anchorMax = new Vector2(1f, 1f);
-        topRect.sizeDelta = new Vector2(outlineExtension * 2f, outlineThickness); // Width to extend to right side  
-        topRect.anchoredPosition = new Vector2(0f, outlineThickness/2f + outlineExtension/2f); // Start at health bar left edge
+        topRect.anchorMax = new Vector2(0f, 1f); // Keep anchor at left edge for consistent positioning
+        topRect.pivot = new Vector2(0f, 0.5f); // Set pivot to left-center
+        topRect.sizeDelta = new Vector2(0f, outlineThickness); // Initial width (will be updated by UpdateAegisOutline)
+        topRect.anchoredPosition = new Vector2(-7f, 4f); // Adjusted positioning
         
         aegisOutlineTop = topOutlineGO.AddComponent<Image>();
         aegisOutlineTop.sprite = yellowSprite;
@@ -1400,9 +1547,10 @@ public class PlayerMovement : MonoBehaviour
         
         RectTransform bottomRect = bottomOutlineGO.AddComponent<RectTransform>();
         bottomRect.anchorMin = new Vector2(0f, 0f);
-        bottomRect.anchorMax = new Vector2(1f, 0f);
-        bottomRect.sizeDelta = new Vector2(outlineExtension * 2f, outlineThickness); // Width to extend to right side
-        bottomRect.anchoredPosition = new Vector2(0f, -(outlineThickness/2f + outlineExtension/2f)); // Start at health bar left edge
+        bottomRect.anchorMax = new Vector2(0f, 0f); // Keep anchor at left edge for consistent positioning
+        bottomRect.pivot = new Vector2(0f, 0.5f); // Set pivot to left-center
+        bottomRect.sizeDelta = new Vector2(0f, outlineThickness); // Initial width (will be updated by UpdateAegisOutline)
+        bottomRect.anchoredPosition = new Vector2(-7f, -5f); // Set to -5 as per your working values
         
         aegisOutlineBottom = bottomOutlineGO.AddComponent<Image>();
         aegisOutlineBottom.sprite = yellowSprite;
@@ -1446,24 +1594,26 @@ public class PlayerMovement : MonoBehaviour
         {
             float shieldPercentage = currentAegisShield / maxAegisShield;
             float outlineThickness = 4f; // Match the thickness used in creation
-            float outlineExtension = 6f; // Match the extension used in creation
             
-            // Calculate total width - always extend full width for seamless connection
-            float totalWidth = outlineExtension * 2f + outlineThickness;
+            // Full width is 968 to represent 100% shield coverage
+            float fullWidth = 968f;
+            float dynamicWidth = shieldPercentage * fullWidth; // Scale width based on shield percentage
             
             // Update top outline width (extends from left edge to shield percentage with full overlap)
             RectTransform topRect = aegisOutlineTop.GetComponent<RectTransform>();
             topRect.anchorMin = new Vector2(0f, 1f);
-            topRect.anchorMax = new Vector2(shieldPercentage, 1f);
-            topRect.sizeDelta = new Vector2(totalWidth, outlineThickness);
-            topRect.anchoredPosition = new Vector2(-outlineExtension/2f, outlineThickness/2f + outlineExtension/2f);
+            topRect.anchorMax = new Vector2(0f, 1f); // Keep anchor at left edge, control width with sizeDelta
+            topRect.pivot = new Vector2(0f, 0.5f); // Set pivot to left-center
+            topRect.sizeDelta = new Vector2(dynamicWidth, outlineThickness);
+            topRect.anchoredPosition = new Vector2(-7f, 4f); // Use exact working values
             
             // Update bottom outline width (extends from left edge to shield percentage with full overlap)
             RectTransform bottomRect = aegisOutlineBottom.GetComponent<RectTransform>();
             bottomRect.anchorMin = new Vector2(0f, 0f);
-            bottomRect.anchorMax = new Vector2(shieldPercentage, 0f);
-            bottomRect.sizeDelta = new Vector2(totalWidth, outlineThickness);
-            bottomRect.anchoredPosition = new Vector2(-outlineExtension/2f, -(outlineThickness/2f + outlineExtension/2f));
+            bottomRect.anchorMax = new Vector2(0f, 0f); // Keep anchor at left edge, control width with sizeDelta
+            bottomRect.pivot = new Vector2(0f, 0.5f); // Set pivot to left-center
+            bottomRect.sizeDelta = new Vector2(dynamicWidth, outlineThickness);
+            bottomRect.anchoredPosition = new Vector2(-7f, -5f); // Use exact working values
         }
     }
     
@@ -1693,15 +1843,15 @@ public class PlayerMovement : MonoBehaviour
             {
                 ultimateBarUpdateCount++;
                 Debug.Log($"Ultimate bar charge changed #{ultimateBarUpdateCount}: {currentUltimateCharge:F1}/{maxUltimateCharge:F1} = {ultimatePercent:F3} ({ultimatePercent*100:F1}%)");
-                Debug.Log($"  Fill amounts: Previous={previousFillAmount:F3} -> Expected={ultimatePercent:F3} -> Actual={actualFillAmount:F3}");
-                Debug.Log($"  Ultimate bar properties: Type={ultimateBarFill.type}, FillMethod={ultimateBarFill.fillMethod}, Active={ultimateBarFill.gameObject.activeInHierarchy}");
+                // Debug.Log($"  Fill amounts: Previous={previousFillAmount:F3} -> Expected={ultimatePercent:F3} -> Actual={actualFillAmount:F3}");
+                // Debug.Log($"  Ultimate bar properties: Type={ultimateBarFill.type}, FillMethod={ultimateBarFill.fillMethod}, Active={ultimateBarFill.gameObject.activeInHierarchy}");
                 
                 // Check for multiple ultimate fill objects and all ultimate-related objects
                 GameObject[] allUltimateFills = FindObjectsByType<GameObject>(FindObjectsSortMode.None).Where(go => go.name == "UltimateFill").ToArray();
                 GameObject[] allUltimateBars = FindObjectsByType<GameObject>(FindObjectsSortMode.None).Where(go => go.name == "UltimateBar").ToArray();
                 GameObject[] allUltimateObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None).Where(go => go.name.ToLower().Contains("ultimate")).ToArray();
                 
-                Debug.Log($"ULTIMATE OBJECT AUDIT: UltimateFill={allUltimateFills.Length}, UltimateBar={allUltimateBars.Length}, Any Ultimate={allUltimateObjects.Length}");
+                // Debug.Log($"ULTIMATE OBJECT AUDIT: UltimateFill={allUltimateFills.Length}, UltimateBar={allUltimateBars.Length}, Any Ultimate={allUltimateObjects.Length}");
                 
                 if (allUltimateFills.Length > 1)
                 {
@@ -1709,7 +1859,7 @@ public class PlayerMovement : MonoBehaviour
                 }
                 
                 // Log all ultimate-related objects with detailed info
-                for (int i = 0; i < allUltimateObjects.Length; i++)
+                /* for (int i = 0; i < allUltimateObjects.Length; i++)
                 {
                     Image img = allUltimateObjects[i].GetComponent<Image>();
                     string fillInfo = "no Image component";
@@ -1719,7 +1869,7 @@ public class PlayerMovement : MonoBehaviour
                         fillInfo = $"fillAmount={img.fillAmount:F3}, type={img.type}, fillMethod={img.fillMethod}, {spriteInfo}, color=({img.color.r:F2},{img.color.g:F2},{img.color.b:F2},{img.color.a:F2})";
                     }
                     Debug.Log($"  Ultimate Object #{i}: {allUltimateObjects[i].name} - {fillInfo}, active={allUltimateObjects[i].activeInHierarchy}, parent={allUltimateObjects[i].transform.parent?.name ?? "null"}");
-                }
+                } */
                 
                 // Extra debug - check if the fill amount is actually being set correctly
                 if (Mathf.Abs(ultimateBarFill.fillAmount - ultimatePercent) > 0.001f)
@@ -1731,12 +1881,12 @@ public class PlayerMovement : MonoBehaviour
                 if (ultimatePercent <= 0.01f)
                 {
                     ultimateBarFill.color = new Color(0.4f, 0.4f, 0.4f, 1f); // Grey when empty
-                    Debug.Log($"  Color set to GREY: ultimatePercent={ultimatePercent:F3} <= 0.01f");
+                    // Debug.Log($"  Color set to GREY: ultimatePercent={ultimatePercent:F3} <= 0.01f");
                 }
                 else
                 {
                     ultimateBarFill.color = new Color(1f, 0.5f, 0f, 1f); // Orange when charging
-                    Debug.Log($"  Color set to ORANGE: ultimatePercent={ultimatePercent:F3} > 0.01f");
+                    // Debug.Log($"  Color set to ORANGE: ultimatePercent={ultimatePercent:F3} > 0.01f");
                 }
                 
                 lastLoggedUltimateCharge = currentUltimateCharge;

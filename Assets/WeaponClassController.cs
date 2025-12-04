@@ -16,7 +16,14 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private float interactionRange = 2f;
     [SerializeField] private Vector3 promptOffset = new Vector3(0, 1.2f, 0); // Lower above shard
     
-    [Header("ValorShard Attack Settings")]
+    [Header("Player Animation Controllers")]
+    [SerializeField] private RuntimeAnimatorController defaultPlayerAnimController = null; // Default animation when no shards equipped
+    [SerializeField] private RuntimeAnimatorController valorShardPlayerAnimController = null; // Animation when Valor Shard equipped
+    [SerializeField] private RuntimeAnimatorController whisperShardPlayerAnimController = null; // Animation when Whisper Shard equipped  
+    [SerializeField] private RuntimeAnimatorController stormShardPlayerAnimController = null; // Animation when Storm Shard equipped
+    
+    // ========== VALOR SHARD CONFIGURATION ==========
+    [Header("Valor Shard - Melee Attack Settings")]
     [SerializeField] private float swordRange = 0.8f; // Closer to player
     [SerializeField] private float swordWidth = 1.2f; // Wider to match player
     [SerializeField] private float swordHeight = 2.0f; // Taller to ensure coverage
@@ -24,21 +31,57 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private int swordDamage = 25;
     [SerializeField] private float swordCooldown = 0.5f; // Cooldown between sword attacks
     [SerializeField] private float waveCooldown = 1.0f; // Cooldown between wave attacks
+    [SerializeField] private float swordAnimationDelay = 0.1f; // Delay before sword damage is applied after animation starts
     
-    [Header("ValorShard Wave Attack Settings")]
+    [Header("Valor Shard - Wave Attack Settings")]
     [SerializeField] private float waveBlockSize = 1f; // Size of each wave block
     [SerializeField] private float waveBlockSpacing = 1.2f; // Spacing between blocks (no overlap)
     [SerializeField] private float waveBounceHeight = 2f; // How high blocks bounce
     [SerializeField] private int waveDamage = 30; // Damage per wave block
-    [SerializeField] private Sprite valorWaveSprite = null; // Sprite for valor wave damage blocks
+    [SerializeField] private GameObject valorWavePrefab = null; // Prefab with animation controller for valor wave damage blocks
+    [SerializeField] private float waveBlockCleanupDelay = 0.3f; // Delay before wave blocks are destroyed after animation
     
-    [Header("WhisperShard Attack Settings")]
+    [Header("Valor Shard - Special Attack Settings")]
+    [SerializeField] private float dashForce = 6f; // Forward propulsion force (reduced)
+    [SerializeField] private float flipUpwardForce = 8f; // Upward force for flip
+    [SerializeField] private int flipDamage = 40; // Damage dealt during flip
+    [SerializeField] private float flipDamageWidth = 2f; // Width of flip damage zone
+    [SerializeField] private float flipDamageHeight = 2f; // Height of flip damage zone
+    [SerializeField] private float dashDelayBeforeAttack = 0.1f; // Delay before dash attack animation starts
+    [SerializeField] private float dashMovementDisableDuration = 0.2f; // How long movement is disabled during dash
+    
+    [Header("Valor Shard - Passive Buff System")]
+    [SerializeField] private float doubleClickAegisPercent = 5f; // 5% aegis shield
+    [SerializeField] private float doubleClickDurabilityAmount = 5f; // 5 durability points
+    [SerializeField] private float doubleClickBuffDuration = 10f; // 10 seconds
+    [SerializeField] private float tripleClickAttackPercent = 15f; // 15% attack buff
+    [SerializeField] private float tripleClickBuffDuration = 5f; // 5 seconds
+    [SerializeField] private float killAttackPercent = 10f; // 10% attack buff per kill
+    [SerializeField] private float killBuffDuration = 10f; // 10 seconds per stack
+    [SerializeField] private int maxKillBuffStacks = 5; // Maximum stackable kill buffs
+    [SerializeField] private float waveChargeAegisPercent = 5f; // 5% aegis shield
+    [SerializeField] private int minWaveChargesForBuff = 3; // 3+ charges required
+    [SerializeField] private float waveChargeBuffDuration = 15f; // 15 seconds for wave buffs
+    [SerializeField] private float valorAegisCapPercent = 33f; // 33% of max health cap for attack-generated aegis
+    
+    [Header("Valor Shard - Ultimate Settings")]
+    [SerializeField] private GameObject attackDummyPrefab = null; // Prefab for summoned attack dummies
+    [SerializeField] private int dummiesPerUltimate = 3; // Number of dummies summoned per ultimate use
+    [SerializeField] private int maxActiveDummies = 5; // Maximum dummies active at once
+    [SerializeField] private float dummyLifespan = 120f; // 2 minutes in seconds
+    [SerializeField] private float summonRadius = 3f; // Radius around player to summon dummies
+    
+    // ========== WHISPER SHARD CONFIGURATION ==========
+    [Header("Whisper Shard - Melee Attack Settings")]
     [SerializeField] private float daggerRange = 0.6f; // Closer than sword
     [SerializeField] private float daggerWidth = 0.8f; // Smaller than sword
     [SerializeField] private float daggerHeight = 1.5f; // Smaller than sword
     [SerializeField] private float daggerDuration = 0.2f; // Quick attack
     [SerializeField] private int daggerDamage = 20;
     [SerializeField] private float daggerCooldown = 0.3f; // Cooldown between dagger melee attacks
+    [SerializeField] private float daggerAnimationDelay = 0.1f; // Delay before dagger damage is applied after animation starts
+    
+    [Header("Whisper Shard - Projectile Attack Settings")]
     [SerializeField] private float projectileSpeed = 15f; // Increased speed for longer horizontal flight
     [SerializeField] private int projectileDamage = 15;
     [SerializeField] private float projectileLifetime = 3f; // How long projectile exists
@@ -50,40 +93,55 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private float projectileWidth = 0.4f; // Projectile collider width
     [SerializeField] private float projectileHeight = 0.6f; // Projectile collider height
     [SerializeField] private Sprite daggerSprite = null; // Sprite for dagger projectile (faces flight direction)
+    [SerializeField] private float projectileThrowAnimationDelay = 0.3f; // Delay after throw animation before projectile spawns
+    [SerializeField] private float projectileRedirectDelay = 0.1f; // Delay between projectile redirects
+    [SerializeField] private float projectileCleanupDelay = 0.5f; // Delay before cleaning up redirected projectiles
     
-    // Tracking variables for dagger recall
-    private GameObject currentThrownDagger = null;
-    private int currentRedirectCount = 0;
-    private bool daggerExpired = false;
-    
-    // WhisperShard multi-click system
-    [SerializeField] private int multiClickThreshold = 5; // Number of clicks needed for triple dagger
-    [SerializeField] private float multiClickTimeWindow = 3f; // Time window for resetting click sequence  
+    [Header("Whisper Shard - Multi-Click System")]
+    [SerializeField] private int multiClickThreshold = 3; // Number of clicks needed for triple dagger (reduced for easier activation)
+    [SerializeField] private float multiClickTimeWindow = 5f; // Time window for resetting click sequence (increased for more forgiving timing)  
     [SerializeField] private float tripleDaggerSpread = 15f; // Angle spread between daggers in degrees
-    private int currentClickCount = 0;
-    private List<GameObject> activeDaggers = new List<GameObject>();
+    [SerializeField] private float tripleDaggerDelay = 0.05f; // Delay between each dagger in triple throw
     
-    [Header("StormShard Attack Settings")]
+    [Header("Whisper Shard - Passive System")]
+    [SerializeField] private float whisperAttackBuffPercent = 3f; // 3% attack buff per enemy hit
+    [SerializeField] private float whisperAttackBuffDuration = 8f; // 8 seconds per buff
+    [SerializeField] private int maxWhisperAttackStacks = 15; // Maximum attack buff stacks
+    
+    // ========== STORM SHARD CONFIGURATION ==========
+    [Header("Storm Shard - Lightning Arc Settings")]
     [SerializeField] private float staffRange = 1f; // Particle emission point distance
     [SerializeField] private float lightningRange = 10f; // Max range for targeted lightning
     [SerializeField] private int lightningDamage = 30;
     [SerializeField] private float lightningCooldown = 0.6f; // Cooldown between lightning arcs
-    [SerializeField] private int boltDamage = 40; // Sky bolt damage
     [SerializeField] private float lightningDuration = 0.3f; // How long lightning arc lasts
+    [SerializeField] private Material lightningArcMaterial = null; // Custom glowing material for lightning arcs and bolt strikes
+    [SerializeField] private float lightningAnimationDelay = 0.1f; // Delay before lightning arc is created after animation starts
+    [SerializeField] private GameObject lightningSparkPrefab = null; // Particle effect for lightning sparks at SSParticle points
+    [SerializeField] private GameObject lightningHitPrefab = null; // Particle effect for lightning hits on enemies
+    
+    [Header("Storm Shard - Lightning Bolt Settings")]
+    [SerializeField] private int boltDamage = 40; // Sky bolt damage
     [SerializeField] private float boltDuration = 0.5f; // How long lightning bolt impact lasts
     [SerializeField] private float boltCooldown = 1.2f; // Cooldown between lightning bolts
     [SerializeField] private float boltHeight = 100f; // Height above player for sky bolt
     [SerializeField] private float boltRange = 15f; // Range to find nearest enemy for sky bolt
     [SerializeField] private GameObject lightningBlastPrefab = null; // Prefab with animation controller for lightning blast
     [SerializeField] private Sprite lightningBoltSprite = null; // Fallback sprite if no prefab assigned
-    [SerializeField] private Material lightningArcMaterial = null; // Custom glowing material for lightning arcs and bolt strikes
+    [SerializeField] private float boltAnimationDelay = 0.1f; // Delay before lightning bolt is created after animation starts
     
-    [Header("Chain Lightning Settings")]
+    [Header("Storm Shard - Chain Lightning Settings")]
     [SerializeField] private float chainRange = 8f; // Range to find nearby enemies for chaining
     [SerializeField] private int maxChainArcs = 2; // Maximum number of chain arcs per attack (1-2)
     [SerializeField] private float chainDamageMultiplier = 0.7f; // Damage multiplier for chain arcs (70% of original)
     [SerializeField] private float chainDelay = 0.1f; // Delay between each chain arc
     [SerializeField] private float chainArcDuration = 0.25f; // How long chain arcs last
+    
+    [Header("Storm Shard - Passive System")]
+    [SerializeField] private float stormMovementSwiftnessPercent = 5f; // 5% swiftness per stack
+    [SerializeField] private float stormMovementBuffDuration = 2f; // Duration per stack when moving
+    [SerializeField] private int maxStormMovementStacks = 10; // Maximum swiftness stacks
+    [SerializeField] private float stormMovementCheckInterval = 0.1f; // How often to check movement (10 times per second)
     
     [Header("Ultimate Charge Settings")]
     [SerializeField] private float valorLeftClickCharge = 5f; // Charge generated per valor left click attack
@@ -114,57 +172,23 @@ public class WeaponClassController : MonoBehaviour
     private float multiClickWindow = 0.8f; // Extended window for easier multi-click detection
     private bool isPerformingSpecialAttack = false;
     
-    // ValorShard Special Attack Settings
-    [SerializeField] private float dashForce = 6f; // Forward propulsion force (reduced)
-    [SerializeField] private float flipUpwardForce = 8f; // Upward force for flip
-    [SerializeField] private int flipDamage = 40; // Damage dealt during flip
-    [SerializeField] private float flipDamageWidth = 2f; // Width of flip damage zone
-    [SerializeField] private float flipDamageHeight = 2f; // Height of flip damage zone
+    // ========== PRIVATE TRACKING VARIABLES ==========
+    // Whisper Shard Tracking
+    private GameObject currentThrownDagger = null;
+    private int currentRedirectCount = 0;
+    private bool daggerExpired = false;
+    private int currentClickCount = 0;
+    private Coroutine resetClickCoroutine = null; // Track reset coroutine to prevent overlaps
+    private List<GameObject> activeDaggers = new List<GameObject>();
+    
+    // Storm Shard Tracking
+    private int stormClickCount = 0; // Alternates between 1 and 2 for attack types
+    
+    // Valor Shard Tracking
     private bool isPerformingFlip = false;
     private float flipStartTime = 0f;
     private float flipDuration = 1f; // Duration of flip animation
     private GameObject flipDamageZone = null;
-    
-    // ValorShard Passive Buff System - Comprehensive Configuration
-    [Header("Valor Shard - Double Click Buffs")]
-    [SerializeField] private float doubleClickAegisPercent = 5f; // 5% aegis shield
-    [SerializeField] private float doubleClickDurabilityAmount = 5f; // 5 durability points
-    [SerializeField] private float doubleClickBuffDuration = 10f; // 10 seconds
-    
-    [Header("Valor Shard - Triple Click Buffs")]
-    [SerializeField] private float tripleClickAttackPercent = 15f; // 15% attack buff
-    [SerializeField] private float tripleClickBuffDuration = 5f; // 5 seconds
-    
-    [Header("Valor Shard - Kill-Based Stackable Buffs")]
-    [SerializeField] private float killAttackPercent = 10f; // 10% attack buff per kill
-    [SerializeField] private float killBuffDuration = 10f; // 10 seconds per stack
-    [SerializeField] private int maxKillBuffStacks = 5; // Maximum stackable kill buffs
-    
-    [Header("Valor Shard - Wave Charge Buffs")]
-    [SerializeField] private float waveChargeAegisPercent = 5f; // 5% aegis shield
-    [SerializeField] private int minWaveChargesForBuff = 3; // 3+ charges required
-    [SerializeField] private float waveChargeBuffDuration = 15f; // 15 seconds for wave buffs
-    
-    [Header("Valor Shard - Ultimate: Summon Attack Dummies")]
-    [SerializeField] private GameObject attackDummyPrefab = null; // Prefab for summoned attack dummies
-    [SerializeField] private int dummiesPerUltimate = 3; // Number of dummies summoned per ultimate use
-    [SerializeField] private int maxActiveDummies = 5; // Maximum dummies active at once
-    [SerializeField] private float dummyLifespan = 120f; // 2 minutes in seconds
-    [SerializeField] private float summonRadius = 3f; // Radius around player to summon dummies
-    
-    [Header("Storm Shard - Movement Passive")]
-    [SerializeField] private float stormMovementSwiftnessPercent = 5f; // 5% swiftness per stack
-    [SerializeField] private float stormMovementBuffDuration = 2f; // Duration per stack when moving
-    [SerializeField] private int maxStormMovementStacks = 10; // Maximum swiftness stacks
-    [SerializeField] private float stormMovementCheckInterval = 0.1f; // How often to check movement (10 times per second)
-    
-    [Header("Whisper Shard - Attack Passive")]
-    [SerializeField] private float whisperAttackBuffPercent = 3f; // 3% attack buff per enemy hit
-    [SerializeField] private float whisperAttackBuffDuration = 8f; // 8 seconds per buff
-    [SerializeField] private int maxWhisperAttackStacks = 15; // Maximum attack buff stacks
-    
-    [Header("Valor Shard - Aegis Cap Passive")]
-    [SerializeField] private float valorAegisCapPercent = 33f; // 33% of max health cap for attack-generated aegis
     
     // Ultimate System Tracking
     private List<GameObject> activeDummies = new List<GameObject>(); // Track active summoned dummies
@@ -185,6 +209,9 @@ public class WeaponClassController : MonoBehaviour
     // Auto-fire System for Storm Shard
     private bool isAutoFiring = false;
     private float nextAutoFireTime = 0f;
+    private int autoFireAttackType = 0; // Cycles between 0 and 1
+    private const float attackType1Interval = 0.583f; // 0.583 seconds for attack type 1
+    private const float attackType2Interval = 0.75f; // 0.75 seconds for attack type 2
     
     // Shard Swap System
     private bool isInSwapMode = false;
@@ -207,7 +234,8 @@ public class WeaponClassController : MonoBehaviour
     private Transform playerTransform;
     
     // Storm Shard Components
-    private GameObject stormParticlePoint; // Invisible emission point for storm attacks
+    private GameObject stormParticlePoint1; // Invisible emission point for storm attack type 1
+    private GameObject stormParticlePoint2; // Invisible emission point for storm attack type 2
     
     // Shard Sprites (will be loaded from the GameObjects)
     private Dictionary<ShardType, Sprite> shardSprites = new Dictionary<ShardType, Sprite>();
@@ -233,6 +261,10 @@ public class WeaponClassController : MonoBehaviour
         InitializeGUI();
         LoadShardSprites();
         FindStormParticlePoint();
+        
+        // Initialize animation controller based on current equipped shards
+        Debug.Log("WeaponClassController: Initializing animation controller...");
+        UpdatePlayerAnimationController();
         
         // Sync ultimate charge configuration with PlayerMovement
         SyncUltimateChargeSettings();
@@ -697,8 +729,15 @@ public class WeaponClassController : MonoBehaviour
             {
                 if (Time.time >= nextAutoFireTime)
                 {
-                    CreateElectricArc(); // Fire another arc
-                    nextAutoFireTime = Time.time + lightningCooldown;
+                    // Fire with current attack type
+                    CreateElectricArc(autoFireAttackType);
+                    
+                    // Set next fire time based on current attack type
+                    float interval = (autoFireAttackType == 0) ? attackType1Interval : attackType2Interval;
+                    nextAutoFireTime = Time.time + interval;
+                    
+                    // Cycle to next attack type
+                    autoFireAttackType = (autoFireAttackType == 0) ? 1 : 0;
                     
                     // Generate ultimate charge for storm constant left click (auto-fire)
                     GenerateUltimateCharge(stormConstantLeftClickCharge);
@@ -727,6 +766,12 @@ public class WeaponClassController : MonoBehaviour
         equippedShards[emptySlot] = shardType;
         UpdateSlotDisplay(emptySlot);
         
+        // Update animation controller if this is the active slot
+        if (emptySlot == activeSlotIndex)
+        {
+            UpdatePlayerAnimationController();
+        }
+        
         // Remove shard from world
         if (nearbyShardObject != null)
         {
@@ -746,6 +791,12 @@ public class WeaponClassController : MonoBehaviour
         // Replace the shard in the specified slot
         equippedShards[slotToReplace] = newShardType;
         UpdateSlotDisplay(slotToReplace);
+        
+        // Update animation controller if this is the active slot
+        if (slotToReplace == activeSlotIndex)
+        {
+            UpdatePlayerAnimationController();
+        }
         
         // Transform the current shard object to become the old shard type
         if (nearbyShardObject != null)
@@ -807,6 +858,9 @@ public class WeaponClassController : MonoBehaviour
         {
             activeSlotIndex = slotIndex;
             UpdateActiveSlotIndicator();
+            
+            // Update animation controller for new active shard
+            UpdatePlayerAnimationController();
         }
     }
     
@@ -872,8 +926,11 @@ public class WeaponClassController : MonoBehaviour
         }
     }
     
-    private void CreateSwordAttack()
+    private void CreateSwordAttack(int attackAnimationType = 0)
     {
+        // Trigger melee attack animation
+        TriggerAttackAnimation(attackAnimationType, swordDuration);
+        
         // Get player's sprite renderer to check facing direction
         SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
         if (playerSprite == null)
@@ -886,6 +943,16 @@ public class WeaponClassController : MonoBehaviour
         // Generate ultimate charge for valor left click attack
         GenerateUltimateCharge(valorLeftClickCharge);
         
+        // Add small delay to sync with animation start
+        StartCoroutine(DelayedSwordAttack(attackPosition));
+    }
+    
+    private System.Collections.IEnumerator DelayedSwordAttack(Vector3 attackPosition)
+    {
+        // Wait for animation to start (adjust this value based on your animation controller transition time)
+        yield return new WaitForSeconds(swordAnimationDelay);
+        
+        // Now create the actual damage object
         StartCoroutine(CreateSwordAttack(attackPosition));
     }
     
@@ -939,7 +1006,9 @@ public class WeaponClassController : MonoBehaviour
                 return;
             }
             
-            CreateDaggerStrike();
+            // Determine attack type based on current click count (0 = first click, 1 = second click)
+            int attackType = Mathf.Min(currentClickCount - 1, 1);
+            CreateDaggerStrike(attackType);
             lastDaggerAttackTime = Time.time;
             
             // Generate ultimate charge for whisper left click attack
@@ -950,6 +1019,13 @@ public class WeaponClassController : MonoBehaviour
     private void TrackMultiClick()
     {
         Debug.Log($"WhisperShard: Click detected! Current count: {currentClickCount}");
+        
+        // Stop any existing reset coroutine since we got a new click
+        if (resetClickCoroutine != null)
+        {
+            StopCoroutine(resetClickCoroutine);
+            resetClickCoroutine = null;
+        }
         
         // Increment click count (always increment for sequential detection)
         currentClickCount++;
@@ -972,7 +1048,7 @@ public class WeaponClassController : MonoBehaviour
         else
         {
             // Start countdown to reset counter if no more clicks come
-            StartCoroutine(ResetClickCountAfterDelay());
+            resetClickCoroutine = StartCoroutine(ResetClickCountAfterDelay());
         }
     }
     
@@ -987,11 +1063,17 @@ public class WeaponClassController : MonoBehaviour
             Debug.Log($"WhisperShard: Click sequence timed out, resetting from {currentClickCount} to 0");
             currentClickCount = 0;
         }
+        
+        // Clear the coroutine reference
+        resetClickCoroutine = null;
     }
 
     private IEnumerator TripleDaggerAttack()
     {
         Debug.Log("WhisperShard: TripleDaggerAttack coroutine started!");
+        
+        // Trigger ultimate attack animation (Type 2) 
+        TriggerAttackAnimation(2, 1.0f);
         
         if (playerTransform == null) 
         {
@@ -1029,7 +1111,7 @@ public class WeaponClassController : MonoBehaviour
                 activeDaggers.Add(dagger);
                 
                 // Add slight delay between dagger spawns for visual effect
-                if (i < 2) yield return new WaitForSeconds(0.05f);
+                if (i < 2) yield return new WaitForSeconds(tripleDaggerDelay);
             }
         }
         
@@ -1145,11 +1227,16 @@ public class WeaponClassController : MonoBehaviour
         }
         else
         {
-            // Left-click: Electric arc with cooldown (only check for manual clicks, not auto-fire)
+            // Left-click: Electric arc with cooldown (only for manual clicks, auto-fire handled separately)
             if (!isAutoFiring && Time.time - lastLightningArcTime < lightningCooldown) return;
             
-            CreateElectricArc();
-            lastLightningArcTime = Time.time;
+            // For manual clicks, cycle between attack types 1 and 2
+            if (!isAutoFiring) {
+                stormClickCount = (stormClickCount + 1) % 2; // Cycles 0 -> 1 -> 0 -> 1...
+                CreateElectricArc(stormClickCount);
+                lastLightningArcTime = Time.time;
+            }
+            // Note: Auto-fire is handled in Update() method with its own timing
             
             // Generate ultimate charge for storm left click attack (manual click)
             GenerateUltimateCharge(stormLeftClickCharge);
@@ -1327,16 +1414,29 @@ public class WeaponClassController : MonoBehaviour
         // Exclude Entities layer to prevent damaging player summons
         damageComponent.excludeLayers = LayerMask.GetMask("Entities");
         
-        // Visual indicator (valor wave sprite)
-        SpriteRenderer blockRenderer = waveBlock.AddComponent<SpriteRenderer>();
-        
-        // Use custom valor wave sprite if assigned, otherwise create fallback golden texture
-        if (valorWaveSprite != null)
+        // Visual indicator (valor wave prefab or fallback sprite)
+        if (valorWavePrefab != null)
         {
-            blockRenderer.sprite = valorWaveSprite;
+            Debug.Log("Using valor wave prefab: " + valorWavePrefab.name);
+            // Use animated prefab - instantiate it as child of the wave block
+            GameObject animatedWave = Instantiate(valorWavePrefab, waveBlock.transform);
+            animatedWave.transform.localPosition = Vector3.zero;
+            animatedWave.transform.localScale = Vector3.one;
+            
+            // Store the animated wave reference in the wave block for later triggering
+            WaveBlockComponent waveComponent = waveBlock.GetComponent<WaveBlockComponent>();
+            if (waveComponent == null)
+            {
+                waveComponent = waveBlock.AddComponent<WaveBlockComponent>();
+            }
+            waveComponent.animatedWave = animatedWave;
         }
         else
         {
+            Debug.Log("Valor wave prefab is null, using fallback sprite");
+            // Fallback: Use sprite renderer for static sprite
+            SpriteRenderer blockRenderer = waveBlock.AddComponent<SpriteRenderer>();
+            
             // Fallback: Create texture scaled to match collider size
             int textureSize = Mathf.RoundToInt(waveBlockSize * 80);
             Texture2D blockTexture = new Texture2D(textureSize, textureSize);
@@ -1348,10 +1448,10 @@ public class WeaponClassController : MonoBehaviour
             blockTexture.SetPixels(pixels);
             blockTexture.Apply();
             blockRenderer.sprite = Sprite.Create(blockTexture, new Rect(0, 0, textureSize, textureSize), Vector2.one * 0.5f);
+            
+            blockRenderer.sortingLayerName = "Player";
+            blockRenderer.sortingOrder = 0;
         }
-        
-        blockRenderer.sortingLayerName = "Player";
-        blockRenderer.sortingOrder = 0;
         
         return waveBlock;
     }
@@ -1362,6 +1462,13 @@ public class WeaponClassController : MonoBehaviour
         yield return new WaitForSeconds(delay);
         
         if (waveBlock == null) yield break;
+        
+        // Trigger the wave animation on the prefab if it exists
+        WaveBlockComponent waveComponent = waveBlock.GetComponent<WaveBlockComponent>();
+        if (waveComponent != null)
+        {
+            waveComponent.TriggerWaveAnimation();
+        }
         
         Vector3 startPos = waveBlock.transform.position;
         Vector3 groundPos = new Vector3(startPos.x, startPos.y + 1f, startPos.z); // Rise to ground level
@@ -1408,7 +1515,7 @@ public class WeaponClassController : MonoBehaviour
         }
         
         // Wait a moment then destroy
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(waveBlockCleanupDelay);
         
         if (waveBlock != null)
             Destroy(waveBlock);
@@ -1416,31 +1523,53 @@ public class WeaponClassController : MonoBehaviour
     
     private void FindStormParticlePoint()
     {
-        // Find existing SSParticlePoint in player hierarchy
-        Transform particlePoint = transform.Find("SSParticlePoint");
-        if (particlePoint == null)
+        // Find existing SSParticlePoint1 and SSParticlePoint2 in player hierarchy
+        Transform particlePoint1 = transform.Find("SSParticlePoint1");
+        Transform particlePoint2 = transform.Find("SSParticlePoint2");
+        
+        if (particlePoint1 == null)
         {
             // Search in children recursively
-            particlePoint = GetComponentInChildren<Transform>().Find("SSParticlePoint");
+            particlePoint1 = GetComponentInChildren<Transform>().Find("SSParticlePoint1");
         }
         
-        if (particlePoint != null)
+        if (particlePoint2 == null)
         {
-            stormParticlePoint = particlePoint.gameObject;
+            // Search in children recursively
+            particlePoint2 = GetComponentInChildren<Transform>().Find("SSParticlePoint2");
+        }
+        
+        if (particlePoint1 != null)
+        {
+            stormParticlePoint1 = particlePoint1.gameObject;
         }
         else
         {
-            Debug.LogError("SSParticlePoint not found! Please create an empty GameObject named 'SSParticlePoint' as a child of the player.");
+            Debug.LogError("SSParticlePoint1 not found! Please create an empty GameObject named 'SSParticlePoint1' as a child of the player.");
             // Create a fallback point
-            stormParticlePoint = new GameObject("SSParticlePoint_Fallback");
-            stormParticlePoint.transform.SetParent(transform);
-            stormParticlePoint.transform.localPosition = new Vector3(1.5f, 1f, 0);
+            stormParticlePoint1 = new GameObject("SSParticlePoint1_Fallback");
+            stormParticlePoint1.transform.SetParent(transform);
+            stormParticlePoint1.transform.localPosition = new Vector3(1.5f, 1f, 0);
+        }
+        
+        if (particlePoint2 != null)
+        {
+            stormParticlePoint2 = particlePoint2.gameObject;
+        }
+        else
+        {
+            Debug.LogError("SSParticlePoint2 not found! Please create an empty GameObject named 'SSParticlePoint2' as a child of the player.");
+            // Create a fallback point
+            stormParticlePoint2 = new GameObject("SSParticlePoint2_Fallback");
+            stormParticlePoint2.transform.SetParent(transform);
+            stormParticlePoint2.transform.localPosition = new Vector3(1.5f, 0.5f, 0);
         }
     }
     
-    private void UpdateStormParticlePosition()
+    private void UpdateStormParticlePosition(int particlePointNumber)
     {
-        if (stormParticlePoint == null) return;
+        GameObject targetParticlePoint = particlePointNumber == 0 ? stormParticlePoint1 : stormParticlePoint2;
+        if (targetParticlePoint == null) return;
         
         // Get player's facing direction
         SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
@@ -1452,9 +1581,9 @@ public class WeaponClassController : MonoBehaviour
         // Position the particle point based on facing direction
         // Adjust these values based on your desired positioning
         float xOffset = facingLeft ? -staffRange : staffRange;
-        float yOffset = 1f; // Height above player center
+        float yOffset = particlePointNumber == 0 ? 1f : 0.5f; // Different heights for different points
         
-        stormParticlePoint.transform.localPosition = new Vector3(xOffset, yOffset, 0);
+        targetParticlePoint.transform.localPosition = new Vector3(xOffset, yOffset, 0);
     }
     
     private void UpdatePlayerFacingForMouse()
@@ -1477,15 +1606,45 @@ public class WeaponClassController : MonoBehaviour
         {
             // Determine if mouse is to the left or right of player
             bool mouseIsLeft = mousePosition.x < playerTransform.position.x;
+            bool previousFlipX = playerSprite.flipX;
             
             // Update player facing direction
             playerSprite.flipX = mouseIsLeft;
+            
+            // If facing direction changed, flip particle points
+            if (previousFlipX != playerSprite.flipX)
+            {
+                FlipParticlePoints(playerSprite.flipX);
+            }
         }
     }
     
-    private void CreateDaggerStrike()
+    /// <summary>
+    /// Flip SS particle points to match player's facing direction while preserving relative position
+    /// </summary>
+    public void FlipParticlePoints(bool facingLeft)
+    {
+        if (stormParticlePoint1 != null)
+        {
+            Vector3 currentPos = stormParticlePoint1.transform.localPosition;
+            // Flip X position while preserving Y and Z
+            stormParticlePoint1.transform.localPosition = new Vector3(-currentPos.x, currentPos.y, currentPos.z);
+        }
+        
+        if (stormParticlePoint2 != null)
+        {
+            Vector3 currentPos = stormParticlePoint2.transform.localPosition;
+            // Flip X position while preserving Y and Z
+            stormParticlePoint2.transform.localPosition = new Vector3(-currentPos.x, currentPos.y, currentPos.z);
+        }
+    }
+    
+    private void CreateDaggerStrike(int attackAnimationType = 0)
     {
         if (playerTransform == null) return;
+        
+        // Trigger melee attack animation
+        TriggerAttackAnimation(attackAnimationType, daggerDuration);
         
         // Get player's facing direction
         SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
@@ -1495,6 +1654,16 @@ public class WeaponClassController : MonoBehaviour
         bool facingLeft = playerSprite != null ? playerSprite.flipX : false;
         Vector3 attackPosition = playerTransform.position + (Vector3.right * (facingLeft ? -daggerRange : daggerRange));
         
+        // Add small delay to sync with animation start
+        StartCoroutine(DelayedDaggerAttack(attackPosition));
+    }
+    
+    private System.Collections.IEnumerator DelayedDaggerAttack(Vector3 attackPosition)
+    {
+        // Wait for animation to start
+        yield return new WaitForSeconds(daggerAnimationDelay);
+        
+        // Now create the actual damage object
         StartCoroutine(CreateDaggerAttack(attackPosition));
     }
     
@@ -1579,6 +1748,9 @@ public class WeaponClassController : MonoBehaviour
     {
         if (playerTransform == null) return;
         
+        // Trigger projectile attack animation (Type 2)
+        TriggerAttackAnimation(2, 0.4f);
+        
         // Get mouse position in world space
         Vector3 mousePosition = Vector3.zero;
         if (Mouse.current != null && Camera.main != null)
@@ -1605,6 +1777,15 @@ public class WeaponClassController : MonoBehaviour
         // Start position is slightly in front of player in throw direction
         Vector3 startPosition = playerTransform.position + (throwDirection * 0.5f);
         
+        StartCoroutine(DelayedProjectileThrow(startPosition, throwDirection));
+    }
+    
+    private System.Collections.IEnumerator DelayedProjectileThrow(Vector3 startPosition, Vector3 throwDirection)
+    {
+        // Wait for throw animation to progress before spawning projectile
+        yield return new WaitForSeconds(projectileThrowAnimationDelay);
+        
+        // Now create the projectile
         StartCoroutine(CreateProjectileDagger(startPosition, throwDirection));
     }
     
@@ -1723,7 +1904,7 @@ public class WeaponClassController : MonoBehaviour
     
     private IEnumerator CleanupExpiredTripleDaggers()
     {
-        yield return new WaitForSeconds(0.5f); // Small delay to let redirects complete
+        yield return new WaitForSeconds(projectileCleanupDelay); // Small delay to let redirects complete
         
         // Destroy all active daggers
         foreach (GameObject dagger in activeDaggers)
@@ -1773,6 +1954,11 @@ public class WeaponClassController : MonoBehaviour
     private IEnumerator CreateRedirectAttack(GameObject dagger, GameObject target)
     {
         if (dagger == null || target == null) yield break;
+        
+        // Wait for projectile redirect delay to create smooth redirects
+        yield return new WaitForSeconds(projectileRedirectDelay);
+        
+        if (dagger == null || target == null) yield break; // Check again after delay
         
         Rigidbody2D daggerRb = dagger.GetComponent<Rigidbody2D>();
         if (daggerRb == null) yield break;
@@ -2038,27 +2224,47 @@ public class WeaponClassController : MonoBehaviour
         Destroy(projectile);
     }
     
-    private void CreateElectricArc()
+    private void CreateElectricArc(int attackAnimationType = 0)
     {
-        if (playerTransform == null || stormParticlePoint == null) return;
+        GameObject currentParticlePoint = attackAnimationType == 0 ? stormParticlePoint1 : stormParticlePoint2;
+        if (playerTransform == null || currentParticlePoint == null) return;
         
-        // Update particle point position based on facing direction
-        UpdateStormParticlePosition();
+        // Trigger magic attack animation
+        TriggerAttackAnimation(attackAnimationType, lightningDuration);
+        
+        // Add small delay to sync with animation start
+        StartCoroutine(DelayedElectricArc(attackAnimationType, currentParticlePoint));
+    }
+    
+    private System.Collections.IEnumerator DelayedElectricArc(int attackAnimationType, GameObject currentParticlePoint)
+    {
+        // Wait for animation to start
+        yield return new WaitForSeconds(lightningAnimationDelay);
+        
+        // Trigger lightning spark effect at the SSParticle point
+        if (lightningSparkPrefab != null && currentParticlePoint != null)
+        {
+            GameObject sparkEffect = Instantiate(lightningSparkPrefab, currentParticlePoint.transform.position, Quaternion.identity);
+            Debug.Log($"Lightning spark effect triggered at {currentParticlePoint.name}");
+            
+            // Auto-destroy the particle effect after a reasonable time
+            Destroy(sparkEffect, 3f);
+        }
         
         // Find nearest enemy within range
         GameObject nearestEnemy = FindNearestEnemy(lightningRange);
         if (nearestEnemy == null)
         {
-            return;
+            yield break;
         }
         
-        Vector3 startPos = stormParticlePoint.transform.position;
+        Vector3 startPos = currentParticlePoint.transform.position;
         Vector3 endPos = nearestEnemy.transform.position;
         
         // Check for obstacles between player and enemy
         if (IsPathBlocked(startPos, endPos))
         {
-            return;
+            yield break;
         }
         
         StartCoroutine(CreateLightningArc(startPos, endPos, nearestEnemy));
@@ -2068,11 +2274,23 @@ public class WeaponClassController : MonoBehaviour
     {
         if (playerTransform == null) return;
         
+        // Trigger ultimate attack animation (Type 2)
+        TriggerAttackAnimation(2, boltDuration);
+        
+        // Add small delay to sync with animation start
+        StartCoroutine(DelayedLightningBolt());
+    }
+    
+    private System.Collections.IEnumerator DelayedLightningBolt()
+    {
+        // Wait for animation to start
+        yield return new WaitForSeconds(boltAnimationDelay);
+        
         // Find nearest enemy within bolt range
         GameObject nearestEnemy = FindNearestEnemy(boltRange);
         if (nearestEnemy == null)
         {
-            return;
+            yield break;
         }
         
         Vector3 skyPosition = new Vector3(playerTransform.position.x, playerTransform.position.y + boltHeight, 0);
@@ -2081,7 +2299,7 @@ public class WeaponClassController : MonoBehaviour
         // Check if ground position is blocked by terrain
         if (IsGroundBlocked(groundPosition))
         {
-            return;
+            yield break;
         }
         
         StartCoroutine(CreateSkyBolt(skyPosition, groundPosition, nearestEnemy));
@@ -2199,6 +2417,16 @@ public class WeaponClassController : MonoBehaviour
         {
             enemyBehavior.TakeDamage(lightningDamage);
             
+            // Trigger lightning hit effect at enemy position
+            if (lightningHitPrefab != null)
+            {
+                GameObject hitEffect = Instantiate(lightningHitPrefab, target.transform.position, Quaternion.identity);
+                Debug.Log($"Lightning hit effect triggered at enemy: {target.name}");
+                
+                // Auto-destroy the particle effect after a reasonable time
+                Destroy(hitEffect, 3f);
+            }
+            
             // Trigger chain lightning from this enemy
             StartCoroutine(TriggerChainLightning(target, lightningDamage));
         }
@@ -2272,6 +2500,17 @@ public class WeaponClassController : MonoBehaviour
         if (enemyBehavior != null)
         {
             enemyBehavior.TakeDamage(chainDamage);
+            
+            // Trigger lightning hit effect at enemy position for chain lightning
+            if (lightningHitPrefab != null)
+            {
+                GameObject hitEffect = Instantiate(lightningHitPrefab, target.transform.position, Quaternion.identity);
+                Debug.Log($"Chain lightning hit effect triggered at enemy: {target.name}");
+                
+                // Auto-destroy the particle effect after a reasonable time
+                Destroy(hitEffect, 3f);
+            }
+            
             Debug.Log($"Chain lightning hit {target.name} for {chainDamage} damage");
         }
         
@@ -2362,6 +2601,16 @@ public class WeaponClassController : MonoBehaviour
         if (enemyBehavior != null)
         {
             enemyBehavior.TakeDamage(boltDamage);
+            
+            // Trigger lightning hit effect at enemy position for lightning bolt
+            if (lightningHitPrefab != null)
+            {
+                GameObject hitEffect = Instantiate(lightningHitPrefab, target.transform.position, Quaternion.identity);
+                Debug.Log($"Lightning bolt hit effect triggered at enemy: {target.name}");
+                
+                // Auto-destroy the particle effect after a reasonable time
+                Destroy(hitEffect, 3f);
+            }
             
             // Trigger chain lightning from this enemy
             StartCoroutine(TriggerChainLightning(target, boltDamage));
@@ -2823,7 +3072,8 @@ public class WeaponClassController : MonoBehaviour
             if (activeWeapon == ShardType.StormShard)
             {
                 isAutoFiring = true;
-                nextAutoFireTime = Time.time + lightningCooldown;
+                autoFireAttackType = 0; // Start with attack type 0
+                nextAutoFireTime = Time.time + attackType1Interval; // Use type 1 interval for first shot
             }
         }
     }
@@ -2912,11 +3162,11 @@ public class WeaponClassController : MonoBehaviour
     private System.Collections.IEnumerator PerformDashSwordAttack()
     {
         // Set performing special attack after a tiny delay to allow third click detection
-        yield return new WaitForSeconds(0.1f);
+        yield return new WaitForSeconds(dashDelayBeforeAttack);
         isPerformingSpecialAttack = true;
         
         // Wait for a shorter dash duration for quicker sword swing
-        yield return new WaitForSeconds(0.2f); // Reduced delay for quicker response
+        yield return new WaitForSeconds(dashMovementDisableDuration); // Reduced delay for quicker response
         
         // Ensure player movement is re-enabled before sword attack
         if (!playerMovement.enabled)
@@ -2924,9 +3174,9 @@ public class WeaponClassController : MonoBehaviour
             yield return new WaitForSeconds(0.1f); // Extra wait if still disabled
         }
         
-        // Perform sword attack with cooldown bypass
+        // Perform sword attack with cooldown bypass and attack type 2
         Debug.Log("About to execute dash sword swing - player movement enabled: " + playerMovement.enabled);
-        UseActiveWeapon(false, true); // Bypass cooldown for dash sword swing
+        CreateSwordAttack(1); // Second click animation
         Debug.Log("Dash sword swing executed!");
         
         // End special attack
@@ -3002,6 +3252,9 @@ public class WeaponClassController : MonoBehaviour
         clickCount = 0; // Reset click count (flip is final attack, so safe to reset)
         flipStartTime = Time.time;
         
+        // Trigger ultimate attack animation (Type 2)
+        TriggerAttackAnimation(2, flipDuration);
+        
         Debug.Log("ValorShard: Flip attack initiated!");
         
         // Generate ultimate charge for valor triple click attack
@@ -3017,8 +3270,7 @@ public class WeaponClassController : MonoBehaviour
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            // Unfreeze Z rotation for flip animation
-            rb.freezeRotation = false;
+            // Keep rotation frozen - no flip effect on player sprite
             
             // Clear existing velocity and apply diagonal force with separate horizontal and vertical forces
             rb.linearVelocity = Vector2.zero;
@@ -3045,19 +3297,14 @@ public class WeaponClassController : MonoBehaviour
         {
             elapsedTime += Time.deltaTime;
             
-            // Rotate player for flip effect (360 degrees over duration)
-            float rotationProgress = elapsedTime / flipDuration;
-            float currentRotation = rotationProgress * 360f;
-            playerTransform.rotation = Quaternion.Euler(0, 0, currentRotation);
+            // Skip flip rotation - player maintains facing direction
             
             yield return null;
         }
         
-        // Ensure player ends upright and freeze rotation again
-        playerTransform.rotation = Quaternion.identity;
+        // Ensure player stays upright (no rotation changes needed)
         if (rb != null)
         {
-            rb.freezeRotation = true; // Re-freeze rotation after flip
             rb.angularVelocity = 0f; // Stop any residual rotation
         }
         
@@ -3076,10 +3323,14 @@ public class WeaponClassController : MonoBehaviour
     
     private void CreateFlipDamageZone()
     {
-        // Create damage zone that follows the player during flip
+        // Create damage zone only in front of the player
         GameObject damageZone = new GameObject("ValorFlipDamage");
         damageZone.transform.SetParent(transform);
-        damageZone.transform.localPosition = Vector3.zero;
+        
+        // Position damage zone in front of player based on facing direction
+        bool facingRight = GetActualFacingDirection();
+        Vector3 frontOffset = new Vector3(facingRight ? flipDamageWidth * 0.5f : -flipDamageWidth * 0.5f, 0, 0);
+        damageZone.transform.localPosition = frontOffset;
         
         // Add collider
         BoxCollider2D collider = damageZone.AddComponent<BoxCollider2D>();
@@ -3127,6 +3378,61 @@ public class WeaponClassController : MonoBehaviour
         flipDamageZone = damageZone;
         
         Debug.Log("Flip damage zone created with damage: " + damageComponent.damageAmount);
+    }
+    
+    // ===== PLAYER ANIMATION SYSTEM =====
+    // Manages animation controller switching based on equipped shards
+    
+    /// <summary>
+    /// Update player animation controller based on currently active shard
+    /// </summary>
+    private void UpdatePlayerAnimationController()
+    {
+        if (playerMovement == null) 
+        {
+            Debug.LogError("WeaponClassController: playerMovement is null in UpdatePlayerAnimationController");
+            return;
+        }
+        
+        ShardType activeShard = equippedShards[activeSlotIndex];
+        RuntimeAnimatorController targetController = defaultPlayerAnimController;
+        
+        Debug.Log($"WeaponClassController: Updating animation controller for shard: {activeShard}");
+        
+        // Select the appropriate animation controller based on active shard
+        switch (activeShard)
+        {
+            case ShardType.ValorShard:
+                targetController = valorShardPlayerAnimController ?? defaultPlayerAnimController;
+                break;
+            case ShardType.WhisperShard:
+                targetController = whisperShardPlayerAnimController ?? defaultPlayerAnimController;
+                break;
+            case ShardType.StormShard:
+                targetController = stormShardPlayerAnimController ?? defaultPlayerAnimController;
+                break;
+            case ShardType.None:
+            default:
+                targetController = defaultPlayerAnimController;
+                break;
+        }
+        
+        Debug.Log($"WeaponClassController: Selected controller: {(targetController != null ? targetController.name : "null")}");
+        
+        // Pass the controller reference to PlayerMovement
+        playerMovement.SetAnimationController(targetController);
+    }
+    
+    /// <summary>
+    /// Trigger attack animation with specific type and duration
+    /// </summary>
+    private void TriggerAttackAnimation(int attackType, float duration = 0.5f)
+    {
+        if (playerMovement == null) return;
+        
+        playerMovement.TriggerAttackAnimation(attackType, duration);
+        
+        Debug.Log($"Triggered {GetActiveWeaponName()} attack animation: Type {attackType}");
     }
     
     // ===== WEAPON SHARD PASSIVE ABILITIES =====
@@ -3778,12 +4084,31 @@ public class DaggerGroundCollision : MonoBehaviour
         }
         
         Debug.Log("WhisperShard: Dagger stuck in ground!");
-        
-        // Optional: Change dagger color to indicate it's stuck
-        SpriteRenderer renderer = GetComponent<SpriteRenderer>();
-        if (renderer != null)
+    }
+}
+
+/// <summary>
+/// Component to hold reference to animated wave prefab for valor wave blocks
+/// </summary>
+public class WaveBlockComponent : MonoBehaviour
+{
+    public GameObject animatedWave;
+    
+    public void TriggerWaveAnimation()
+    {
+        if (animatedWave != null)
         {
-            renderer.color = new Color(0.8f, 0.8f, 0.8f, 0.9f); // Slightly grayed out
+            Animator animator = animatedWave.GetComponent<Animator>();
+            if (animator != null)
+            {
+                // Trigger the wave animation - adjust trigger name based on your prefab's animation controller
+                animator.SetTrigger("StartWave");
+                Debug.Log("Triggered wave animation on prefab: " + animatedWave.name);
+            }
+            else
+            {
+                Debug.LogWarning("No Animator found on valor wave prefab: " + animatedWave.name);
+            }
         }
     }
 }
