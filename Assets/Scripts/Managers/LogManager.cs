@@ -2,17 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class LogManager : MonoBehaviour
 {
     // Singleton instance thats able to be globally accessed
-    public static LogManager instance = null;
+    public static LogManager instance;
 
-    public static string logName = string.Empty; // Log Name
+    private string logName = string.Empty; // Log Name
 
-    public static StreamWriter logFile; // Direct reference to log file
+    private Stream logStream; // Stream to log file
 
     // ERROR [0] > WARNING [1] > INFO [2] > DEBUG [3]
     public static int ERROR = 0;
@@ -20,13 +21,17 @@ public class LogManager : MonoBehaviour
     public static int INFO = 2;
     public static int DEBUG = 3;
 
-    private static String[] logLevels = {"ERROR", "WARNING", "INFO", "DEBUG"};
+    private String[] logLevels = {"ERROR", "WARNING", "INFO", "DEBUG"};
 
     // logLevel writes all logs that are the set level or LOWER
-    public static int fileLevel = INFO;
+    private int fileLevel = INFO;
 
     // consoleLevel displays all logs that are the set level or LOWER
-    public static int consoleLevel = DEBUG;
+    private int consoleLevel = DEBUG;
+
+    // maximum size of the log in bytes
+    private int maxSize = 500;
+    private int offset = 0;
 
     // Initialize code
     private void Awake()
@@ -37,9 +42,9 @@ public class LogManager : MonoBehaviour
 
         // If instance does exist and it is not this, destroy this. Only 1 instance can exist
         else if (instance != this)
-            Destroy(gameObject);
+            Destroy(this.gameObject);
 
-        DontDestroyOnLoad(gameObject);
+        DontDestroyOnLoad(this.gameObject);
 
         // Create Log File
         createLog();
@@ -65,15 +70,16 @@ public class LogManager : MonoBehaviour
             // Add Logs subfolder
             logName = "logs/" + logName;
 
-            logFile = File.CreateText(logName);
+            logStream = new FileStream(logName, FileMode.OpenOrCreate);
 
             // Directly write Log Level into log
-            logFile.WriteLineAsync(("Log Level: " + logLevels[fileLevel]));
+
+            writeToLogFile("Log Level: " + logLevels[fileLevel]);
 
             // Directly write OS Info into log
-            logFile.WriteLineAsync("Platform: " + Environment.OSVersion.Platform);
-            logFile.WriteLineAsync("OS Version: " + Environment.OSVersion.VersionString);
-            logFile.WriteLineAsync("OS Description: " + System.Runtime.InteropServices.RuntimeInformation.OSDescription);
+            writeToLogFile("Platform: " + Environment.OSVersion.Platform);
+            writeToLogFile("OS Version: " + Environment.OSVersion.VersionString);
+            writeToLogFile("OS Description: " + System.Runtime.InteropServices.RuntimeInformation.OSDescription);
 
             // Log that the app started
             log("Application Started!", INFO);
@@ -81,7 +87,7 @@ public class LogManager : MonoBehaviour
     }
 
     // dest refers to destination, -1 = both, 0 = only console, 1 = only file
-    public void log(string message, int level, int dest = -1)
+    public void log(string message, int level, int dest = -1, Boolean closeStream=false)
     {
         // Write to console (if applicable)
         if (dest != 1)
@@ -114,15 +120,37 @@ public class LogManager : MonoBehaviour
                 String timestamp = date.TimeOfDay.ToString().Substring(0, 8);
 
                 // Write Log
-                logFile.WriteLineAsync(timestamp + " [" + logLevels[level] + "] \t" + message);
+                writeToLogFile(timestamp + " [" + logLevels[level] + "] \t" + message, closeStream);
             }
+        }
+    }
+
+    public void writeToLogFile(string message, Boolean closeStream=false)
+    {
+        message += '\n';
+        byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+
+        logStream.Seek(offset, SeekOrigin.Begin);
+        logStream.Write(messageBytes, 0, messageBytes.Length);
+
+        // update offset
+        offset += messageBytes.Length;
+
+        // move offset to half of the max size, captures both earliest half and latest half
+        if(offset > maxSize)
+        {
+            offset = maxSize / 2;
+        }
+
+        if (closeStream)
+        {
+            logStream.Close();
         }
     }
 
     private void OnApplicationQuit()
     {
         // Close Log
-        log("Application Quit!", INFO);
-        logFile.Close();
+        log("Application Quit!", INFO, -1, true);
     }
 }

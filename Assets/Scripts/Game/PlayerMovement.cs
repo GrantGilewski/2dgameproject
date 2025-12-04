@@ -157,6 +157,10 @@ public class PlayerMovement : MonoBehaviour
     
     private void GetInput()
     {
+        // Don't process player input while paused
+        if (PauseMenuScript.isPaused)
+            return;
+
         // Use new Input System
         horizontalInput = 0f;
         jumpInput = false;
