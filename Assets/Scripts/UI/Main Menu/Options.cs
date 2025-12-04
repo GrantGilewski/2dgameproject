@@ -6,11 +6,11 @@ public class OptionsMenu : MonoBehaviour
 
     public void OpenOptions()
     {
-        Debug.Log("OpenOptions called!");
+        LogManager.instance.log("OpenOptions called!", LogManager.INFO);
         OptionsPanel.SetActive(true);
     }
 
-    public void CloseOptions()
+    public void CloseNewGame()
     {
         OptionsPanel.SetActive(false);
     }

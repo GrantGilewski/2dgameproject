@@ -6,7 +6,7 @@ using TMPro;
 
 public class MainMenu : MonoBehaviour
 {
-    public GameObject slotPanel;    // Panel that holds the save slot buttons
+    public GameObject slotPanel;// Panel that holds the save slot buttons
     public TextMeshProUGUI slotInfoText; // Text element that displays info about the selected slot
     private int selectedSlot = -1;    // Tracks which slot the player has selected (-1 = none
     public GameObject mainPanel;
@@ -27,13 +27,17 @@ public class MainMenu : MonoBehaviour
         mainPanel.SetActive(true);
         slotPanel.SetActive(false);
     }
+
     // SelectSlot: Called when the player clicks a slot button.
     // Stores the chosen slot index and updates the info text with metadata (timestamp or "Empty Slot").
     public void SelectSlot(int slot)
     {
         selectedSlot = slot;
         UpdateSlotInfo(slot);
+        Debug.Log("Selected slot: " + selectedSlot);
+
     }
+
     // UpdateSlotInfo: Checks if a save file exists for the given slot.
     // If it does, display the last saved timestamp. If not, show "Empty Slot".
 
@@ -54,27 +58,32 @@ public class MainMenu : MonoBehaviour
     // Loads the save data from the selected slot, switches to the saved scene,
     // and applies the player’s saved position/stats.
 
-    public void LoadSelectedSlot()
+    public void ContinueFromSlot(int slot)
     {
-        SaveData data = SaveSystem.LoadGame(selectedSlot);
-        if (data == null) return;
-
-        pendingData = data;
-        SceneManager.sceneLoaded += OnSceneLoaded;
-        SceneManager.LoadScene(data.sceneName);
-    }
-
-
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        if (pendingData != null && PlayerManager.Instance != null)
+        SaveData data = SaveSystem.LoadGame(slot);
+        if (data == null)
         {
-            PlayerManager.Instance.ApplySaveData(pendingData);
-            Debug.Log("Applied save data after scene load.");
-            pendingData = null;
+            Debug.LogWarning("Slot " + slot + " is empty!");
+            return;
         }
-        SceneManager.sceneLoaded -= OnSceneLoaded; // unsubscribe
+        Debug.Log("Confirming continue from slot: " + selectedSlot);
+
+
+        GameManager.Instance.LoadGame(data);
     }
+
+
+    public void ConfirmContinue()
+    {
+        if (selectedSlot == -1)
+        {
+            Debug.LogWarning("No slot selected!");
+            return;
+        }
+
+        ContinueFromSlot(selectedSlot);
+    }
+
 
     // ContinueGame: Convenience method for a "Continue" button.
     // Finds the most recent save slot and loads it automatically.
@@ -85,7 +94,7 @@ public class MainMenu : MonoBehaviour
         if (latestSlot != -1)
         {
             selectedSlot = latestSlot;
-            LoadSelectedSlot();
+            ContinueFromSlot(latestSlot);
         }
     }
     // FindMostRecentSlot: Loops through all slots and finds the one with the newest timestamp.
