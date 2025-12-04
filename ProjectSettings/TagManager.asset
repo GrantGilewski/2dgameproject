@@ -13,6 +13,9 @@ TagManager:
   - Trigger
   - Teleporter
   - Checkpoint
+  - WhisperShard
+  - StormShard
+  - ValorShard
   layers:
   - Default
   - TransparentFX
@@ -53,6 +56,9 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 1
+  - name: NPC
+    uniqueID: 235773735
+    locked: 0
   - name: Player
     uniqueID: 3322507321
     locked: 0
