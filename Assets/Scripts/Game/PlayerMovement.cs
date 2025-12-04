@@ -37,6 +37,23 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Sprite walkingSprite1;
     [SerializeField] private Sprite walkingSprite2;
     [SerializeField] private Sprite fallingSprite;
+    [SerializeField] private Sprite idleSpriteWhisper;
+    [SerializeField] private Sprite walkingSprite1Whisper;
+    [SerializeField] private Sprite walkingSprite2Whisper;
+    [SerializeField] private Sprite fallingSpriteWhisper;
+    [SerializeField] private Sprite AttackingSpriteWhisper;
+    [SerializeField] private Sprite idleSpriteValor;
+    [SerializeField] private Sprite walkingSprite1Valor;
+    [SerializeField] private Sprite walkingSprite2Valor;
+    [SerializeField] private Sprite fallingSpriteValor;
+    [SerializeField] private Sprite AttackingSpriteValor;
+    [SerializeField] private Sprite ChargingSpriteValor;
+    [SerializeField] private Sprite BigAttackSpriteValor;
+    [SerializeField] private Sprite idleSpriteStorm;
+    [SerializeField] private Sprite walkingSprite1Storm;
+    [SerializeField] private Sprite walkingSprite2Storm;
+    [SerializeField] private Sprite fallingSpriteStorm;
+    [SerializeField] private Sprite AttackingSpriteStorm;
     [SerializeField] private float animationSpeed = 0.2f; // Time between frame changes
 
     [Header("Particle Effects")]
@@ -62,6 +79,8 @@ public class PlayerMovement : MonoBehaviour
     private bool hasCeilingClearance = true; // Check if player has space above to jump
     private float animationTimer = 0f;
     private bool useFirstWalkSprite = true;
+    
+    private bool IsUsingBigAttack = false;
 
     private GameObject currentPlatform;
     
@@ -896,7 +915,193 @@ public class PlayerMovement : MonoBehaviour
         
         // Check if player is moving horizontally
         bool isMoving = Mathf.Abs(horizontalInput) > 0.1f;
-        
+
+        if (weaponController.IsWhisperShardActive)
+        {if (weaponController.IsAttacking)
+            {
+                spriteRenderer.sprite = AttackingSpriteWhisper;
+                animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                weaponController.IsAttacking = false;
+                animationTimer = 0f;
+            }
+        }
+        // Change sprite based on movement and ground state
+        else if (!isGrounded)
+        {
+            // Use falling sprite when in the air
+            if (fallingSprite != null)
+                spriteRenderer.sprite = fallingSpriteWhisper;
+            else if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteWhisper; // Fallback to idle if no falling sprite
+            
+            // Reset animation when in air
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+        else if (isMoving && isGrounded)
+        {
+            // Animate between two walking sprites when moving on ground
+            animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                // Switch between walking sprites
+                useFirstWalkSprite = !useFirstWalkSprite;
+                animationTimer = 0f;
+            }
+            
+            // Set the appropriate walking sprite
+            if (useFirstWalkSprite && walkingSprite1Whisper != null)
+                spriteRenderer.sprite = walkingSprite1Whisper;
+            else if (!useFirstWalkSprite && walkingSprite2Whisper != null)
+                spriteRenderer.sprite = walkingSprite2Whisper;
+        }
+        else
+        {
+            // Use idle sprite when not moving and grounded
+            if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteWhisper;
+            
+            // Reset animation when not moving
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+        }
+        else if (weaponController.IsValorShardActive)
+        {
+        if (weaponController.IsChargingValorAttack)
+        {
+            spriteRenderer.sprite = ChargingSpriteValor;
+            IsUsingBigAttack = true;
+            animationTimer = 0f;
+            }
+        else{
+        if(IsUsingBigAttack && !weaponController.IsChargingValorAttack)
+                {
+            animationTimer += Time.deltaTime;
+            spriteRenderer.sprite = BigAttackSpriteValor;
+            
+            if (animationTimer >= animationSpeed * 3)
+            {
+                // Switch between walking sprites;
+                animationTimer = 0f;
+                IsUsingBigAttack = false;
+            }
+                }
+        else if (weaponController.IsAttacking)
+            {
+                spriteRenderer.sprite = AttackingSpriteValor;
+                animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                weaponController.IsAttacking = false;
+                animationTimer = 0f;
+            }
+        }
+        // Change sprite based on movement and ground state
+        else if (!isGrounded)
+        {
+            // Use falling sprite when in the air
+            if (fallingSprite != null)
+                spriteRenderer.sprite = fallingSpriteValor;
+            else if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteValor; // Fallback to idle if no falling sprite
+            
+            // Reset animation when in air
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+        else if (isMoving && isGrounded)
+        {
+            // Animate between two walking sprites when moving on ground
+            animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                // Switch between walking sprites
+                useFirstWalkSprite = !useFirstWalkSprite;
+                animationTimer = 0f;
+            }
+            
+            // Set the appropriate walking sprite
+            if (useFirstWalkSprite && walkingSprite1Valor != null)
+                spriteRenderer.sprite = walkingSprite1Valor;
+            else if (!useFirstWalkSprite && walkingSprite2Valor != null)
+                spriteRenderer.sprite = walkingSprite2Valor;
+        }
+        else
+        {
+            // Use idle sprite when not moving and grounded
+            if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteValor;
+            
+            // Reset animation when not moving
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+            }
+        }
+        else if (weaponController.IsStormShardActive)
+        {
+            
+        if (weaponController.IsAttacking)
+            {
+                spriteRenderer.sprite = AttackingSpriteStorm;
+                animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                weaponController.IsAttacking = false;
+                animationTimer = 0f;
+            }
+        }
+        // Change sprite based on movement and ground state
+        else if (!isGrounded)
+        {
+            // Use falling sprite when in the air
+            if (fallingSprite != null)
+                spriteRenderer.sprite = fallingSpriteStorm;
+            else if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteStorm; // Fallback to idle if no falling sprite
+            
+            // Reset animation when in air
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+        else if (isMoving && isGrounded)
+        {
+            // Animate between two walking sprites when moving on ground
+            animationTimer += Time.deltaTime;
+            
+            if (animationTimer >= animationSpeed)
+            {
+                // Switch between walking sprites
+                useFirstWalkSprite = !useFirstWalkSprite;
+                animationTimer = 0f;
+            }
+            
+            // Set the appropriate walking sprite
+            if (useFirstWalkSprite && walkingSprite1Storm != null)
+                spriteRenderer.sprite = walkingSprite1Storm;
+            else if (!useFirstWalkSprite && walkingSprite2Storm != null)
+                spriteRenderer.sprite = walkingSprite2Storm;
+        }
+        else
+        {
+            // Use idle sprite when not moving and grounded
+            if (idleSprite != null)
+                spriteRenderer.sprite = idleSpriteStorm;
+            
+            // Reset animation when not moving
+            animationTimer = 0f;
+            useFirstWalkSprite = true;
+        }
+        }
+        else {
         // Change sprite based on movement and ground state
         if (!isGrounded)
         {
@@ -937,6 +1142,7 @@ public class PlayerMovement : MonoBehaviour
             // Reset animation when not moving
             animationTimer = 0f;
             useFirstWalkSprite = true;
+        }
         }
     }
 }

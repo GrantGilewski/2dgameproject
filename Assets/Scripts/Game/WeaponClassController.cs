@@ -53,6 +53,7 @@ public class WeaponClassController : MonoBehaviour
     [SerializeField] private float boltHeight = 100f; // Height above player for sky bolt
     [SerializeField] private float boltRange = 15f; // Range to find nearest enemy for sky bolt
     
+    
     // Weapon System
     private enum ShardType { None, ValorShard, WhisperShard, StormShard }
     private ShardType[] equippedShards = new ShardType[2]; // Two slots
@@ -96,6 +97,9 @@ public class WeaponClassController : MonoBehaviour
     // Public Properties
     public bool IsChargingValorAttack => isChargingValorAttack;
     public bool IsWhisperShardActive => equippedShards[activeSlotIndex] == ShardType.WhisperShard;
+    public bool IsValorShardActive => equippedShards[activeSlotIndex] == ShardType.ValorShard;
+    public bool IsStormShardActive => equippedShards[activeSlotIndex] == ShardType.StormShard;
+    public bool IsAttacking = false;
     
     void Start()
     {
@@ -494,6 +498,7 @@ public class WeaponClassController : MonoBehaviour
     private void UseActiveWeapon(bool isRightClick = false)
     {
         ShardType activeShard = equippedShards[activeSlotIndex];
+        IsAttacking = true;
         
         switch (activeShard)
         {
@@ -939,23 +944,7 @@ public class WeaponClassController : MonoBehaviour
             enemyDamageField.SetValue(damageComponent, true);
         }
         
-        // Visual indicator (blue for dagger)
-        SpriteRenderer daggerRenderer = daggerAttack.AddComponent<SpriteRenderer>();
         
-        // Create larger texture scaled to match collider size
-        int textureWidth = Mathf.RoundToInt(daggerWidth * 64);
-        int textureHeight = Mathf.RoundToInt(daggerHeight * 64);
-        Texture2D daggerTexture = new Texture2D(textureWidth, textureHeight);
-        Color[] pixels = new Color[textureWidth * textureHeight];
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            pixels[i] = new Color(0f, 0.5f, 1f, 0.8f); // Blue color for dagger, more visible
-        }
-        daggerTexture.SetPixels(pixels);
-        daggerTexture.Apply();
-        
-        daggerRenderer.sprite = Sprite.Create(daggerTexture, new Rect(0, 0, textureWidth, textureHeight), Vector2.one * 0.5f);
-        daggerRenderer.sortingOrder = 10;
         
         // Store facing direction
         SpriteRenderer playerSprite = GetComponent<SpriteRenderer>();
